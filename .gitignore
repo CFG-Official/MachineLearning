@@ -19,6 +19,7 @@ data/*
 # Annotation files
 *.rtf
 *.ini
+test_data/TEST_RESULTS/*.txt
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

@@ -35,7 +35,7 @@ def classify_from_results(results, stride = 2, clip_len = 3, consecutive_clips =
     classified_fire_percentage = fire_clips / results.size()[0]
     print("Fire clips: ", classified_fire_percentage)
 
-    if  classified_fire_percentage < fire_percentage:
+    if classified_fire_percentage < fire_percentage:
         print("Not enough fire clips")
         return 0, None
 
@@ -135,8 +135,9 @@ for video in os.listdir(args.videos):
     
     # Combine results for each clip using a certain criterion
     classification = classify_from_results(results, stride=args.clip_stride, clip_len=args.clip_len, 
-                                            consecutive_clips=3, threshold=0.75, fire_percentage=0.1)
+                                            consecutive_clips=3, threshold=0.75, fire_percentage=0.01)
     if classification[1] is None:
+        # cast classification[0] to string
         f.write(str(classification[0]))
     else:
         # TO DO: stampare frame indicato

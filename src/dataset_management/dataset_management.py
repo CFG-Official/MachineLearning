@@ -368,11 +368,11 @@ if __name__ == "__main__":
     
     
     root_path = Path.cwd()
-    if root_path.name != "FireDetection":
+    if root_path.name != "MachineLearning":
         main_dir_found = False
         for parent in root_path.parents:
             print("Parent:", parent)
-            if parent.name == "FireDetection":
+            if parent.name == "MachineLearning":
                 root_path = parent
                 main_dir_found = True
                 break

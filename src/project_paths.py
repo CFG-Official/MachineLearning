@@ -2,12 +2,12 @@ from pathlib import Path
 
 def find_fire_detection_dir():
     path = Path.cwd()
-    if path.name == "FireDetection":
+    if path.name == "MachineLearning":
         return path
     for parent in path.parents:
-        if parent.name == "FireDetection":
+        if parent.name == "MachineLearning":
             return parent
-    raise Exception("FireDetection directory not found")
+    raise Exception("MachineLearning directory not found")
 
 
 root_path = find_fire_detection_dir()

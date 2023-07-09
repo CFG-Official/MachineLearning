@@ -48,7 +48,6 @@ def classify_from_results(results, stride = 2, clip_len = 3, consecutive_clips =
     print("Not enough consecutive fire clips")    
     return 0, None
 
-
 def init_parameter():   
     parser = argparse.ArgumentParser(description='Test')
     parser.add_argument("--videos", type=str, default='foo_videos/', help="Dataset folder")
@@ -78,6 +77,8 @@ model = model.float().to(device)
 
 # For all the test videos
 for video in os.listdir(args.videos):
+    print("Processing video ", video)
+
     # Process the video
     video_path = os.path.join(args.videos, video)
     ret = True
@@ -107,8 +108,11 @@ for video in os.listdir(args.videos):
             frame_counter += 1
             if frame_counter == args.clip_len:
                 input = apply_preprocessing(clip, model.preprocessing)
-                input = [transforms.functional.to_tensor(frame) for frame in input.values()]
-                input = torch.stack(input).to(device)
+                # input = [transforms.functional.to_tensor(frame) for frame in input.values()]
+                input =  torch.stack([transforms.functional.to_tensor(input[k])
+                                for k in input.keys()]) 
+                input = input.to(device)
+                
                 with torch.no_grad():
                     results[clip_counter] = output_function(model(input))
 

@@ -149,10 +149,10 @@ for video in os.listdir(args.videos):
     start_sec = 0
     end_sec = args.clip_len/fps
     for i in range(results.size()[0]):
-        str = "Clip {} [{}:{}]: {}".format(i, start_sec, end_sec, results[i])
+        string = "Clip {} [{}:{}]: {}".format(i, start_sec, end_sec, results[i])
         start_sec += args.clip_stride/fps
         end_sec = start_sec + args.clip_len/fps
-        f.write(str + "\n")
+        f.write(string + "\n")
 
 
 

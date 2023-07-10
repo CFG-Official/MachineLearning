@@ -139,7 +139,7 @@ for video in os.listdir(args.videos):
     
     # Combine results for each clip using a certain criterion
     classification = classify_from_results(results, stride=args.clip_stride, clip_len=args.clip_len, 
-                                            consecutive_clips=3, threshold=0.5, fire_percentage=0)
+                                            consecutive_clips=1, threshold=0.5, fire_percentage=0)
     if classification[1] is None:
         # cast classification[0] to string
         f.write(str(classification[0]))

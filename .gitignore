@@ -1,5 +1,6 @@
 .DS_Store
 tempCodeRunnerFile.py
+events.out*
 
 # Data
 data/*

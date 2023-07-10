@@ -24,7 +24,7 @@ def apply_preprocessing(frames, preprocess):
         transform_input["image%d" % i] = image
     return preprocess(**transform_input)
 
-def classify_from_results(results, stride = 2, clip_len = 3, consecutive_clips = 3, threshold = 0.75, fire_percentage = 0.01):
+def classify_from_results(results, stride = 2, clip_len = 3, consecutive_clips = 3, threshold = 0.5, fire_percentage = 0.01):
     """Classification based on clip combined results.
     If there are 10% of clips classified as fire, and 3 of them consecutively, then the video is classified as fire.
     The indicted frame is the first common frame between the first and second clip classified as fire.
@@ -139,7 +139,7 @@ for video in os.listdir(args.videos):
     
     # Combine results for each clip using a certain criterion
     classification = classify_from_results(results, stride=args.clip_stride, clip_len=args.clip_len, 
-                                            consecutive_clips=3, threshold=0.75, fire_percentage=0.01)
+                                            consecutive_clips=3, threshold=0.5, fire_percentage=0)
     if classification[1] is None:
         # cast classification[0] to string
         f.write(str(classification[0]))
@@ -153,7 +153,7 @@ for video in os.listdir(args.videos):
     start_sec = 0
     end_sec = args.clip_len/fps
     for i in range(results.size()[0]):
-        string = "Clip {} [{}:{}]: {}".format(i, start_sec, end_sec, results[i])
+        string = "Clip {} [{}:{}]: {}".format(i, round(start_sec,2), round(end_sec,2), round(results[i].item(),4))
         start_sec += args.clip_stride/fps
         end_sec = start_sec + args.clip_len/fps
         f.write(string + "\n")

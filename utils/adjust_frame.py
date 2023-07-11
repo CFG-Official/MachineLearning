@@ -24,29 +24,23 @@ def extract_text_from_rtf(file_path):
         return rtf_content
 
 
-video_folder = train_videos_path / "1"
-gt_folder = train_original_annotations_path / "1"
+def process_videos(video_folder: Path, gt_folder: Path):
+    video_list = os.listdir(video_folder)
+    for video in video_list:
+        # Get frame rate
+        cap = cv2.VideoCapture(video_folder / video)
+        frame_rate = cap.get(cv2.CAP_PROP_FPS)
+        cap.release()
 
-video_list = os.listdir(video_folder)
+        # Get video annotation
+        label = extract_text_from_rtf(os.path.join(gt_folder, video.split(".")[0] + ".rtf"))
 
-for video in video_list:
-    # Get frame rate
-    cap = cv2.VideoCapture(os.path.join(video_folder, video))
-    frame_rate = cap.get(cv2.CAP_PROP_FPS)
-    cap.release()
+        # Get frame number
+        frame_number = int(label.split(",")[0])
 
-    # Get video annotation
-    label = extract_text_from_rtf(os.path.join(gt_folder, video.split(".")[0] + ".rtf"))
+        # Get other info
+        other_info = label.split(",")[1:] # es. ['Smoke', 'Fire']
 
-    # Get frame number
-    frame_number = int(label.split(",")[0])
-
-    # Get other info
-    other_info = label.split(",")[1:] # es. ['Smoke', 'Fire']
-
-    # Replace the content of the file rtf
-    with open(os.path.join(gt_folder, video.split(".")[0] + ".rtf"), 'w') as file:
-        file.write(str(math.ceil(frame_number*frame_rate)) + "," + ",".join(other_info))
-
-
-
+        # Replace the content of the file rtf
+        with open(os.path.join(gt_folder, video.split(".")[0] + ".rtf"), 'w') as file:
+            file.write(str(math.ceil(frame_number*frame_rate)) + "," + ",".join(other_info))

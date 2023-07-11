@@ -1,5 +1,9 @@
 .DS_Store
 tempCodeRunnerFile.py
+events.out*
+
+# Altrimenti crasha git
+weights/* 
 
 # Data
 data/*

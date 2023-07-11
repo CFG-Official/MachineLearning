@@ -3,11 +3,11 @@ from albumentations import Resize, CenterCrop, Normalize, Sequential
 import torch
 from torch import nn
 import torchvision.models as models
-from torchvision.models import efficientnet_b4
+from torchvision.models import efficientnet_b0
 
 class Efficientnet_LSTM_temporal2(Model):
     
-    def __init__(self, num_classes=1, to_train=0):
+    def __init__(self, num_classes=1, to_train=0, state_dict=None):
         
         super().__init__(num_classes=num_classes, to_train=to_train)
         
@@ -19,15 +19,16 @@ class Efficientnet_LSTM_temporal2(Model):
                                         max_pixel_value=255.,
                                         always_apply=True),
                             ])
+        if state_dict is not None:
+            model = models.efficientnet_b0(weights=models.EfficientNet_B0_Weights.IMAGENET1K_V1)
+            model.classifier[1] = torch.nn.Linear(in_features=model.classifier[1].in_features, out_features=self.num_classes, bias=True)
         
-        if self.to_train is None:
-            model = efficientnet_b4(pretrained=False)
+            model.classifier.requires_grad = True
+            model.load_state_dict(state_dict)
         else:
-            weights = models.EfficientNet_B4_Weights.IMAGENET1K_V1
-            model = efficientnet_b4(weights=weights)
-            
-        out_features = model.classifier[1].in_features
-        
+            weights = models.EfficientNet_B0_Weights.IMAGENET1K_V1
+            model = efficientnet_b0(weights=weights)
+                    
         for param in model.parameters():
             param.requires_grad = False
             
@@ -40,11 +41,18 @@ class Efficientnet_LSTM_temporal2(Model):
                 for param in feature.parameters():
                     param.requires_grad = True
         
+
+        out_features = model.classifier[1].in_features
+
         self.cnn = model.features
-        self.rnn = nn.LSTM(input_size=out_features*49, hidden_size=49, num_layers=1, batch_first=True)
-        self.fc = torch.nn.Linear(in_features=49, out_features=self.num_classes, bias=True)
+        self.rnn = nn.LSTM(input_size=out_features*64, hidden_size=64, num_layers=1, batch_first=True)
+        self.fc = torch.nn.Sequential([
+            torch.nn.Dropout(p=0.4, inplace=True),
+            torch.nn.Linear(in_features=64, out_features=self.num_classes, bias=True)
+        ])   
 
     def forward(self, x):
+        # x: (batch_size, time_steps, C, H, W)
         
         _, time_steps, _, _, _ = x.size()
         
@@ -64,6 +72,7 @@ class Efficientnet_LSTM_temporal2(Model):
         # RNN
         r_out, _ = self.rnn(c_out)
         
+
         # FC
         out = self.fc(r_out[:, -1, :])
         

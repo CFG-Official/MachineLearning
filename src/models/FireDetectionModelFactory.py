@@ -13,7 +13,7 @@ from .vgg_LSTM_temporal2 import VGG16_LSTM_temporal2
 from .X3D_xs import X3D_xs
 from .YOLO_temporal2 import YOLO_temporal2
 from .X3D_s import X3D_s
-
+from .EfficientNet import EfficientNet
 class FireDetectionModelFactory:
 
     models = {
@@ -31,12 +31,16 @@ class FireDetectionModelFactory:
         'vgg16_LSTM_temporal2': VGG16_LSTM_temporal2,
         'x3d_xs': X3D_xs,
         'YOLO_temporal2': YOLO_temporal2,
-        'x3d_s': X3D_s
+        'x3d_s': X3D_s,
+        'efficientnet': EfficientNet
     }
 
     @staticmethod
-    def create_model(model_name, num_classes, to_train):
+    def create_model(model_name, num_classes, to_train, state_dict=None):
         if model_name not in FireDetectionModelFactory.models.keys():
             raise ValueError(f"Model '{model_name}' is not supported.")
         model_class = FireDetectionModelFactory.models[model_name]
-        return model_class(num_classes, to_train)
+        if state_dict is not None:
+            return model_class(num_classes, to_train, state_dict)
+        else:
+            return model_class(num_classes, to_train)

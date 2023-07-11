@@ -38,5 +38,5 @@ class X3D_xs(Model):
         # B = batch size, T = numero di frame, C = numero di canali, H = altezza, W = larghezza
         if len(x.size()) == 4:
             x = x.unsqueeze(0)
-
+        x = x.permute(0, 2, 1, 3, 4)
         return self.model(x)

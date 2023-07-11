@@ -3,10 +3,10 @@ import re
 import cv2
 import math
 import sys
+from pathlib import Path
 
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from src.project_paths import *
-
+# sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+# from src.project_paths import *
 def extract_text_from_rtf(file_path):
     with open(file_path, 'r') as file:
         rtf_content = file.read()
@@ -28,12 +28,13 @@ def process_videos(video_folder: Path, gt_folder: Path):
     video_list = os.listdir(video_folder)
     for video in video_list:
         # Get frame rate
-        cap = cv2.VideoCapture(video_folder / video)
+        cap = cv2.VideoCapture(str(video_folder / video))
         frame_rate = cap.get(cv2.CAP_PROP_FPS)
         cap.release()
 
         # Get video annotation
         label = extract_text_from_rtf(os.path.join(gt_folder, video.split(".")[0] + ".rtf"))
+        print(label)
 
         # Get frame number
         frame_number = int(label.split(",")[0])

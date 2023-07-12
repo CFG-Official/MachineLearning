@@ -144,8 +144,8 @@ for video in os.listdir(args.videos):
         # cast classification[0] to string
         f.write(str(classification[0]))
     else:
-        # TO DO: stampare frame indicato
-        f.write(str(classification[0]) + " " + str(classification[1]))
+        # TO DO: visualizzare frame indicato
+        f.write(str(classification[0]) + " " + str(classification[1]/fps))
 
     
     ## DEBUG ##

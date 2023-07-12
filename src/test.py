@@ -24,35 +24,35 @@ def apply_preprocessing(frames, preprocess):
         transform_input["image%d" % i] = image
     return preprocess(**transform_input)
 
-def classify_from_results(results, stride = 2, clip_len = 3, consecutive_clips = 3, threshold = 0.75, fire_percentage = 0.01):
+def classify_from_results(results, stride = 2, clip_len = 3, consecutive_clips = 3, threshold = 0.5, fire_percentage = 0.01):
     """Classification based on clip combined results.
     If there are 10% of clips classified as fire, and 3 of them consecutively, then the video is classified as fire.
     The indicted frame is the first common frame between the first and second clip classified as fire.
     A clip is classified as fire if the probability of fire is greater than 0.75."""
-    results = np.array(list(results))
-    fire_clips = np.where(results > threshold)[0].size
+    fire_clips = torch.where(results >= threshold)[0].size()[0]
 
-    if fire_clips / results.size < fire_percentage:
-        # Not enough fire clips
+    # Calculate the percentage of clips classified as fire
+    classified_fire_percentage = fire_clips / results.size()[0]
+    print("Fire clips: ", classified_fire_percentage)
+
+    if classified_fire_percentage < fire_percentage:
         print("Not enough fire clips")
         return 0, None
-    # Enough fire clips, check if there are 3 consecutive clips
-    for i in range(results.size - consecutive_clips + 1):
-        if np.all(results[i:i+consecutive_clips] > threshold):
-            # 3 consecutive clips
-            # return 1 and the first common frame between clip i and i+1
-            # clip i starts at frame i*CLIP_STRIDE
-            # clip i+1 starts at frame (i+1)*CLIP_STRIDE
-            # the first common frame is (i+1)*CLIP_STRIDE
-            return 1, (i+1)*stride
-    
-    print("Not enough consecutive fire clips")
 
+    # Enough fire clips, check if there are 3 consecutive clips
+    # If there are, return the first frame of the first clip
+    for i in range(results.size()[0] - consecutive_clips + 1):
+        if torch.all(results[i:i+consecutive_clips] > threshold):
+            return 1, i*stride # return the first frame of the first clip
+
+    print("Not enough consecutive fire clips")    
+    return 0, None
 
 def init_parameter():   
     parser = argparse.ArgumentParser(description='Test')
     parser.add_argument("--videos", type=str, default='foo_videos/', help="Dataset folder")
     parser.add_argument("--results", type=str, default='foo_results/', help="Results folder")
+    parser.add_argument("--model", type=str, default='slowfast', help="Model name")
     parser.add_argument("--clip_len", type=int, default=3, help="Length of a single clip")
     parser.add_argument("--clip_stride", type=int, default=2, help="Stride between clips")
     args = parser.parse_args()
@@ -61,89 +61,87 @@ def init_parameter():
 args = init_parameter()
 
 # Here you should initialize your method
+torch.cuda.empty_cache()
 
-model_name = "slowfast"
-path = Path("../weights/SlowFast L 0.15 A 0.975/best_model.pth")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model_name = str(args.model)
+path = Path("../weights/" + str(args.model) + ".pth")
 output_function = nn.Sigmoid()
 
 model = FireDetectionModelFactory.create_model(model_name, num_classes=1, to_train=0)
 model.load_state_dict(torch.load(path, map_location=torch.device("cpu")))
 model.eval()
+model = model.float().to(device)
+
+
 
 # For all the test videos
 for video in os.listdir(args.videos):
+    print("Processing video ", video)
+
     # Process the video
     video_path = os.path.join(args.videos, video)
     ret = True
+    
     cap = cv2.VideoCapture(video_path)
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+    num_clips = math.ceil(max(1, (total_frames - args.clip_len)/args.clip_stride + 1)) # It must generate at least one clip
+    
+    print('Frames per second =', fps)
+    print('Total frames =', total_frames)
+    print("Going to generate ", num_clips, " clips")
 
-    print('frames per second =', cap.get(cv2.CAP_PROP_FPS))
+    # Create a tensor of num_clips elements to store the results
+    results = torch.zeros(num_clips, 1).to(device)
 
-    frames = [] # list of frames in video
+    clip = []
+    frame_counter = 0
+    clip_counter = 0
+
     while ret:
         ret, img = cap.read()
         # Here you should add your code for applying your method
         if ret:
             # add to the list of frames
-            frames.append(np.asarray(img)) # append the frame in list
+            clip.append(np.asarray(img)) # append the frame in list
+            frame_counter += 1
+            if frame_counter == args.clip_len:
+                input = apply_preprocessing(clip, model.preprocessing)
+                # input = [transforms.functional.to_tensor(frame) for frame in input.values()]
+                input =  torch.stack([transforms.functional.to_tensor(input[k])
+                                for k in input.keys()]) 
+                input = input.to(device)
+                
+                with torch.no_grad():
+                    results[clip_counter] = output_function(model(input))
+
+                clip = clip[args.clip_stride:] # remove the first args.clip_stride frames
+                frame_counter = args.clip_len - args.clip_stride
+                clip_counter += 1
+
         ########################################################
     cap.release()
 
-    print("Extracted frames from ", video_path, ": ", len(frames))
+    if clip_counter < num_clips:
+        # The last clip is not complete, so we need to complete it with the last frames
+        # We add the last frame args.clip_len - frame_counter times
 
-    # Apply preprocessing of the model 
-    frames = apply_preprocessing(frames, model.preprocessing) 
+        """clip.extend([clip[-1]] * (args.clip_len - frame_counter)) # DUPLICATE FRAME"""
+        clip.extend([np.zeros(clip[0].shape)] * (args.clip_len - frame_counter)) # PAD FRAME
 
-    # After preprocessing frames is a dict of tensors
-    # frames["image"] is the first frame
-    # frames["image0"] is the second frame
-    # frames["image(num_frames-2)"] is the last frame
+        input = apply_preprocessing(clip, model.preprocessing)
+        input = [transforms.functional.to_tensor(frame) for frame in input.values()]
+        input_tensor = torch.stack(input).to(device)
+        results[clip_counter] = output_function(model(input_tensor))
 
     f = open(args.results+video+".txt", "w")
-
-    # Here you should add your code for writing the results
-    num_frames = len(frames)
-    num_clips = math.ceil(max(1, (num_frames - args.clip_len)/args.clip_stride + 1)) # It must generate at least one clip
-    to_pad = (num_clips * args.clip_len) - num_frames # Frames to generate in padding
-    
-    # Create each clip
-
-    # Create a list of num_clips elements
-    clips = [[] for _ in range(num_clips)]
-
-    ordered_items = list(sorted(frames.items(), key=lambda x: 0 if x[0] == "image" else int(x[0][5:])))
-
-    start_frame_counter = 0
-    for i in range(num_clips):
-        for k in range(args.clip_len):
-            try:
-                frame_tensor = transforms.functional.to_tensor(ordered_items[start_frame_counter + k][1])
-            except IndexError:
-                print("Generating padding frame")
-                frame_tensor = torch.transpose(transforms.functional.to_tensor(np.zeros(clips[0][0].shape)), 0, 1)
-            clips[i].append(frame_tensor)
-        start_frame_counter += args.clip_stride
-
-
-    print("Created ", i+1, "clips out of ", num_clips)
-
-    # Clips[i] è una lista di tensori, ogni tensore è un frame
-    # clips[i][j] è il j-esimo frame della i-esima clip
-    # Crea un tensore che contiene tutti i frame di una clip
-
-    # Create a dict of results for each clip
-    results = {}
-    model = model.float()
-    # Apply tqdm to this loop
-
-    for i in tqdm(range(num_clips)):
-        input = torch.stack(clips[i], dim=0).unsqueeze(0)
-        result = output_function(model(input.float()))
-        results[i] = result.item()
     
     # Combine results for each clip using a certain criterion
-    classification = classify_from_results(results.values(), stride=args.clip_stride, clip_len=args.clip_len, consecutive_clips=3, threshold=0.75, fire_percentage=0.1)
+    classification = classify_from_results(results, stride=args.clip_stride, clip_len=args.clip_len, 
+                                            consecutive_clips=1, threshold=0.5, fire_percentage=0)
     if classification[1] is None:
+        # cast classification[0] to string
         f.write(str(classification[0]))
     else:
         # TO DO: stampare frame indicato
@@ -152,7 +150,14 @@ for video in os.listdir(args.videos):
     
     ## DEBUG ##
     f.write("\n")
-    f.write(str(results.items()))
+    start_sec = 0
+    end_sec = args.clip_len/fps
+    for i in range(results.size()[0]):
+        string = "Clip {} [{}:{}]: {}".format(i, round(start_sec,2), round(end_sec,2), round(results[i].item(),4))
+        start_sec += args.clip_stride/fps
+        end_sec = start_sec + args.clip_len/fps
+        f.write(string + "\n")
+
 
 
     ########################################################

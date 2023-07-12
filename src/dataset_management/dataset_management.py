@@ -458,9 +458,23 @@ class DatasetManagement:
         If mode is "classic", it splits the dataset into train, validation and test sets.
         If mode is "k-fold", it splits only the test. In this case other videos remain in the training set folder.
         """
+        # set paths and the mivia percentage of videos which have to be put in the validation set
         no_fire_original_frames_folder = source_path /'0'
         fire_original_frames_folder = source_path / '1'
         mivia_percentage = 0.8
+        
+        # create the destination folders
+        os.makedirs(destination_path / "TRAINING_SET" / "0", exist_ok=True)
+        os.makedirs(destination_path / "TRAINING_SET" / "1", exist_ok=True)
+
+        os.makedirs(destination_path / "TEST_SET" / "0", exist_ok=True)
+        os.makedirs(destination_path / "TEST_SET" / "1", exist_ok=True)
+
+        os.makedirs(train_splitted_annotations_path / "0", exist_ok=True)
+        os.makedirs(train_splitted_annotations_path / "1", exist_ok=True)
+
+        os.makedirs(test_splitted_annotations_path / "0", exist_ok=True)
+        os.makedirs(test_splitted_annotations_path / "1", exist_ok=True)
 
         no_fires_folders = [folder_name for folder_name in os.listdir(no_fire_original_frames_folder) if
                             os.path.isdir(os.path.join(no_fire_original_frames_folder, folder_name))]
@@ -474,6 +488,7 @@ class DatasetManagement:
 
         (total_no_fires, total_fires, total) = self.count_entries()
 
+        # create thea list of entries for each category
         mivia_fire_entries = []
         custom_fire_entries = []
         mivia_no_fire_entries = []
@@ -491,68 +506,76 @@ class DatasetManagement:
                 else:
                     custom_no_fire_entries.append(entry)
 
-            
-
-
-
-        ##############################################################
-
-        
-        first_split_no_fires = no_fires_folders[:int(total_no_fires * first_split_perctentage)]
-        first_split_fires = fires_folders[:int(total_fires * first_split_perctentage)]
-
-        remaining_no_fires = no_fires_folders[int(total_no_fires * first_split_perctentage):]
-        remaining_fires = fires_folders[int(total_fires * first_split_perctentage):]
-
-        os.makedirs(destination_path / "TRAINING_SET" / "0", exist_ok=True)
-        os.makedirs(destination_path / "TRAINING_SET" / "1", exist_ok=True)
-
-        os.makedirs(destination_path / "TEST_SET" / "0", exist_ok=True)
-        os.makedirs(destination_path / "TEST_SET" / "1", exist_ok=True)
-
-        os.makedirs(train_splitted_annotations_path / "0", exist_ok=True)
-        os.makedirs(train_splitted_annotations_path / "1", exist_ok=True)
-
-        os.makedirs(test_splitted_annotations_path / "0", exist_ok=True)
-        os.makedirs(test_splitted_annotations_path / "1", exist_ok=True)
-
+        # if mode is "classic", it splits the dataset into train and validation
         if mode == "classic":
+            # create the validation set folders
             os.makedirs(destination_path / "VALIDATION_SET" / "0", exist_ok=True)
             os.makedirs(destination_path / "VALIDATION_SET" / "1", exist_ok=True)
-
+            
             os.makedirs(val_splitted_annotations_path / "0", exist_ok=True)
             os.makedirs(val_splitted_annotations_path / "1", exist_ok=True)
+
+            # we have to compute the number of videos to put in the validation set from the total of the no fire videos
+            # and the total of the fire videos depending on the given percentage
+            no_fires_to_put_in_validation = int(total_no_fires * p[1])
+            # now on the total of videos for each catedory we have to compute how many of them have to come from the mivia dataset
+            mivia_no_fires_to_put_in_validation = int(no_fires_to_put_in_validation * mivia_percentage)
+            # if this percentage is higher than the total number of mivia available videos, we put all of them in the validation set and the
+            # remaining ones will come from the custom dataset
+            if mivia_no_fires_to_put_in_validation > len(mivia_no_fire_entries):
+                mivia_no_fires_to_put_in_validation = len(mivia_no_fire_entries)
+            custom_no_fires_to_put_in_validation = no_fires_to_put_in_validation - mivia_no_fires_to_put_in_validation
+
+            # we do the same for the fire videos
+            fires_to_put_in_validation = int(total_fires * p[1])
+            mivia_fires_to_put_in_validation = int(fires_to_put_in_validation * mivia_percentage)
+            if mivia_fires_to_put_in_validation > len(mivia_fire_entries):
+                mivia_fires_to_put_in_validation = len(mivia_fire_entries)
+            custom_fires_to_put_in_validation = fires_to_put_in_validation - mivia_fires_to_put_in_validation
             
-            val_num_no_fires = int(total_no_fires * p[1])
-            val_num_fires = int(total_fires * p[1])
-
-            second_split_no_fires = first_split_no_fires[:val_num_no_fires]
-            second_split_fires = first_split_fires[:val_num_fires]
+            # create the lists of the validation set and the training set
+            no_fire_entries_validation = mivia_no_fire_entries[:mivia_no_fires_to_put_in_validation] + custom_no_fire_entries[:custom_no_fires_to_put_in_validation]
+            fire_entries_validation = mivia_fire_entries[:mivia_fires_to_put_in_validation] + custom_fire_entries[:custom_fires_to_put_in_validation]
+            no_fire_entries_training = mivia_no_fire_entries[mivia_no_fires_to_put_in_validation:] + custom_no_fire_entries[custom_no_fires_to_put_in_validation:]
+            fire_entries_training = mivia_fire_entries[mivia_fires_to_put_in_validation:] + custom_fire_entries[custom_fires_to_put_in_validation:]
             
-            for folder in second_split_no_fires:
-                shutil.move(destination_path / "TRAINING_SET" / "0" / folder, destination_path / "VALIDATION_SET" / "0" / folder)
-                rtf_file = folder.split(".")[0] + ".rtf"
-                shutil.copyfile(train_splitted_annotations_path / "0" / rtf_file, val_splitted_annotations_path / "0" / rtf_file)
+            # iterate over the validation entries and copy them in the validation set folder
+            for entry in no_fire_entries_validation:
+                # obtain original frames path from video path
+                original_frames_path = entry.get_video_path().replace("VIDEOS", "ORIGINAL_FRAMES")
+                destination_frames_path = destination_path / "VALIDATION_SET" / "0" / entry.get_name()
+                shutil.copytree(original_frames_path, destination_frames_path)
+                shutil.copy(entry.get_annotation_path(), val_splitted_annotations_path / "0" / entry.get_name())
+                entry.set_frames_path(destination_frames_path)
 
-            for folder in second_split_fires:
-                shutil.move(destination_path / "TRAINING_SET" / "1" / folder, destination_path / "VALIDATION_SET" / "1" / folder)
-                rtf_file = folder.split(".")[0] + ".rtf"
-                shutil.copyfile(train_splitted_annotations_path / "1" / rtf_file, val_splitted_annotations_path / "1" / rtf_file)
-
-        for folder in first_split_no_fires:
-            video_path = train_videos_path / "0" / folder
-            destination_frames_path = destination_path / "TRAINING_SET" / "0" / folder
-            self._entries_paths_dict[video_path].set_frames_path(destination_frames_path)            
-            shutil.copytree(no_fire_original_frames_folder / folder, destination_frames_path)
-            rtf_file = folder.split(".")[0] + ".rtf"
-            shutil.copyfile(train_original_annotations_path / "0"/ rtf_file, train_splitted_annotations_path / "0" / rtf_file)
-        
-        for folder in first_split_fires:
-            shutil.copytree(fire_original_frames_folder / folder, destination_path / "TRAINING_SET" / "1" / folder)
-            rtf_file = folder.split(".")[0] + ".rtf"
-            shutil.copyfile(train_original_annotations_path / "1"/ rtf_file, train_splitted_annotations_path / "1" / rtf_file)
-        
-
+            for entry in fire_entries_validation:
+                original_frames_path = entry.get_video_path().replace("VIDEOS", "ORIGINAL_FRAMES")
+                destination_frames_path = destination_path / "VALIDATION_SET" / "1" / entry.get_name()
+                shutil.copytree(original_frames_path, destination_frames_path)
+                shutil.copy(entry.get_annotation_path(), val_splitted_annotations_path / "1" / entry.get_name())
+                entry.set_frames_path(destination_frames_path)
+                
+        else:
+            
+            no_fire_entries_training = mivia_no_fire_entries + custom_no_fire_entries
+            fire_entries_training = mivia_fire_entries + custom_fire_entries
+            
+        # iterate over the training entries and copy them in the training set folder
+        for entry in no_fire_entries_training:
+            # obtain original frames path from video path
+            original_frames_path = entry.get_video_path().replace("VIDEOS", "ORIGINAL_FRAMES")
+            destination_frames_path = destination_path / "TRAINING_SET" / "0" / entry.get_name()
+            shutil.copytree(original_frames_path, destination_frames_path)
+            shutil.copy(entry.get_annotation_path(), train_splitted_annotations_path / "0" / entry.get_name())
+            entry.set_frames_path(destination_frames_path)
+            
+        for entry in fire_entries_training:
+            original_frames_path = entry.get_video_path().replace("VIDEOS", "ORIGINAL_FRAMES")
+            destination_frames_path = destination_path / "TRAINING_SET" / "1" / entry.get_name()
+            shutil.copytree(original_frames_path, destination_frames_path)
+            shutil.copy(entry.get_annotation_path(), train_splitted_annotations_path / "1" / entry.get_name())
+            entry.set_frames_path(destination_frames_path)
+            
 
 def download_google_file(shader_url, output_name):
     id_url = "https://drive.google.com/uc?id=" + shader_url.split("/")[5]

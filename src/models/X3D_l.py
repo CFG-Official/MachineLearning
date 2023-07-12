@@ -5,7 +5,7 @@ import albumentations
 from models.model import Model
 from pytorchvideo.models import create_res_basic_head
 
-class X3D_s(Model):
+class X3D_l(Model):
     
     def __init__(self, num_classes=1, to_train=0):
         

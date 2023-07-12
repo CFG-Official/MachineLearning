@@ -11,8 +11,9 @@ from .Slow_R50 import Slow_R50
 from .vgg_LSTM_temporal import VGG16_LSTM_temporal
 from .vgg_LSTM_temporal2 import VGG16_LSTM_temporal2
 from .X3D_xs import X3D_xs
-from .YOLO_temporal2 import YOLO_temporal2
 from .X3D_s import X3D_s
+from .X3D_l import X3D_l
+from .YOLO_temporal2 import YOLO_temporal2
 
 class FireDetectionModelFactory:
 
@@ -30,8 +31,10 @@ class FireDetectionModelFactory:
         'vgg16_LSTM_temporal': VGG16_LSTM_temporal,
         'vgg16_LSTM_temporal2': VGG16_LSTM_temporal2,
         'x3d_xs': X3D_xs,
+        'x3d_s': X3D_s,
+        'x3d_l': X3D_l,
         'YOLO_temporal2': YOLO_temporal2,
-        'x3d_s': X3D_s
+        
     }
 
     @staticmethod

@@ -467,14 +467,8 @@ class DatasetManagement:
         os.makedirs(destination_path / "TRAINING_SET" / "0", exist_ok=True)
         os.makedirs(destination_path / "TRAINING_SET" / "1", exist_ok=True)
 
-        os.makedirs(destination_path / "TEST_SET" / "0", exist_ok=True)
-        os.makedirs(destination_path / "TEST_SET" / "1", exist_ok=True)
-
         os.makedirs(train_splitted_annotations_path / "0", exist_ok=True)
         os.makedirs(train_splitted_annotations_path / "1", exist_ok=True)
-
-        os.makedirs(test_splitted_annotations_path / "0", exist_ok=True)
-        os.makedirs(test_splitted_annotations_path / "1", exist_ok=True)
 
         no_fires_folders = [folder_name for folder_name in os.listdir(no_fire_original_frames_folder) if
                             os.path.isdir(os.path.join(no_fire_original_frames_folder, folder_name))]

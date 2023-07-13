@@ -11,8 +11,8 @@ class X3D_l(Model):
         
         super().__init__(num_classes=num_classes, to_train=to_train)
         # Preprocessing parameters
-        side_size = 182
-        crop_size = 182
+        side_size = 256
+        crop_size = 256
         mean = [0.45, 0.45, 0.45]
         std = [0.225, 0.225, 0.225]
 

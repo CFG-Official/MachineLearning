@@ -104,8 +104,6 @@ class Detector(object):
             # The incriminated frame is the first frame of the clip
             self._incriminated_frame = first_frame_clip
 
-
-# Here you should import your method
 def apply_preprocessing(frames, preprocess):
     # Apply preprocessing to list of frames (copy paste of VideoFrameDataset)
     additional_targets = {f"image{i}": "image" for i in range(0, len(frames))}
@@ -127,7 +125,6 @@ def init_parameter():
 
 args = init_parameter()
 
-# Here you should initialize your method
 torch.cuda.empty_cache() # clear memory
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -135,7 +132,6 @@ model_name = str(args.model)
 weight_path = Path("../weights/" + str(args.model) + ".pth")
 output_function = nn.Sigmoid()
 pad_strategy = "zeros"
-
 labels = ["Fire", "Smoke"]
 
 model = FireDetectionModelFactory.create_model(model_name, num_classes=len(labels), to_train=0)

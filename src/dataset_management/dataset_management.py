@@ -2,10 +2,6 @@ import gdown
 import os
 import shutil
 from pathlib import Path
-import sys
-import random
-sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
-from project_paths import *
 
 # The default extension for video files. Currently set to ".mp4".
 default_video_extension = ".mp4"
@@ -42,9 +38,9 @@ class DatasetEntry:
     Class Variables:
         default_annotation_extension (str): The default extension for the annotation file, currently set to ".rtf".
     """
-    __slots__ = ['_video_path', '_annotation_path', '_name', '_fire','_frames_path']
+    __slots__ = ['_video_path', '_annotation_path', '_name', '_fire']
 
-    def __init__(self, video_path: Path, annotation_path: Path, fire: bool = None, frames_path: Path = None):
+    def __init__(self, video_path: Path, annotation_path: Path, fire: bool = None):
         """ Initializes a DatasetEntry instance.
 
         Args:
@@ -56,7 +52,6 @@ class DatasetEntry:
         self._annotation_path = annotation_path
         self._name = video_path.stem
         self._fire = fire
-        self._frames_path = frames_path
         if fire is None:
             self._fire = DatasetEntry.__check_fire(video_path, annotation_path)
 
@@ -114,29 +109,6 @@ class DatasetEntry:
         os.remove(self._annotation_path)
         shutil.copy(new_annotation_path, self._annotation_path)
 
-    
-    def get_frames_path(self):
-        """Path: The path to the frames."""
-        return self._frames_path
-    
-    def set_frames_path(self, frames_path: Path, replace: bool = False):
-        if self._frames_path == frames_path:
-            return
-
-        if self._frames_path is not None and self._frames_path.stem != frames_path.stem:
-            raise ValueError(f"New frames directory does not have the same name of older one ({self._frames_path.stem})")
-
-        if replace:
-            if frames_path.is_dir():
-                raise ValueError(f"New path already exist: {frames_path}")
-            
-            os.makedirs(frames_path.parent, exist_ok=True)
-            shutil.move(self._frames_path, frames_path)
-
-        self._frames_path = frames_path       
-    
-    
-    
     def is_fire(self):
         """bool: True if the video contains fire, False otherwise."""
         return self._fire
@@ -275,13 +247,12 @@ class DatasetEntry:
 
 class DatasetManagement:
     __slots__ = ['_source_videos_directory', '_source_no_fire_annotations_directory',
-                 '_source_fire_annotations_directory', '_destination_directory', '_entries_paths_dict']
-    
+                 '_source_fire_annotations_directory', '_destination_directory', '_entries_paths_list']
     _default_output_folder_name = "REORGANIZED_DATASET"
 
     def __init__(self, source_videos_directory: Path, source_no_fire_annotations_directory: Path,
                  source_fire_annotations_directory: Path, destination_directory: Path):
-        self._entries_paths_dict = {}
+        self._entries_paths_list = []
         DatasetManagement.__check_directories(source_videos_directory, source_no_fire_annotations_directory,
                                               source_fire_annotations_directory)
         self._source_videos_directory = source_videos_directory
@@ -306,26 +277,26 @@ class DatasetManagement:
             raise NotADirectoryError(f"{source_fire_annotations_directory} is not a directory")
 
     def __len__(self):
-        return len(self._entries_paths_dict)
+        return len(self._entries_paths_list)
 
-    def __getitem__(self, video_path: Path):
-        return self._entries_paths_dict[video_path]
+    def __getitem__(self, index):
+        return self._entries_paths_list[index]
 
-    def __setitem__(self, video_path: Path, value: DatasetEntry):
-        self._entries_paths_dict[video_path] = value
+    def __setitem__(self, index, value: DatasetEntry):
+        self._entries_paths_list[index] = value
 
-    def __delitem__(self, video_path: Path):
-        del self._entries_paths_dict[video_path]
+    def __delitem__(self, index):
+        del self._entries_paths_list[index]
 
     def __iter__(self):
-        return iter(self._entries_paths_dict.values())
+        return iter(self._entries_paths_list)
 
     def add_entry(self, video_path: Path, annotation_path: Path):
         new_entry = DatasetEntry(video_path, annotation_path)
-        self._entries_paths_dict[video_path] = new_entry
+        self._entries_paths_list.append(new_entry)
 
-    def remove_entry(self, entry: Path):
-        del self._entries_paths_dict[entry]
+    def remove_entry(self, entry: DatasetEntry):
+        self._entries_paths_list.remove(entry)
 
     def _populate_dataset(self):
         no_fire_videos_dir = self._source_videos_directory / default_no_fire_video_folder_name
@@ -368,7 +339,7 @@ class DatasetManagement:
         custom_fire_count = 0
         custom_no_fire_count = 0
 
-        for entry in self._entries_paths_dict:
+        for entry in self._entries_paths_list:
             if not isinstance(entry, DatasetEntry):
                 raise TypeError(f"Entry is not a DatasetEntry instance")
             if entry.is_fire():
@@ -432,11 +403,11 @@ class DatasetManagement:
         
         total_count = new_fire_set_len + new_no_fire_set_len
 
-        if total_count != len(self._entries_paths_dict):
+        if total_count != len(self._entries_paths_list):
             print(
                 f"WARNING: The number of annotations in the new directories is different from the number of entries in the dataset. The dataset will be reloaded anyway.")
 
-        for entry in self._entries_paths_dict:
+        for entry in self._entries_paths_list:
             if not isinstance(entry, DatasetEntry):
                 raise TypeError(f"{entry} is not a DatasetEntry instance")
 
@@ -446,130 +417,12 @@ class DatasetManagement:
                 entry.set_new_annotation(new_no_fire_set[entry.get_annotation_path().stem])
 
     def count_entries(self):
-        no_fire_entries = sum(1 for entry in self._entries_paths_dict if not entry.is_fire())
-        fire_entries = sum(1 for entry in self._entries_paths_dict if entry.is_fire())
-        total_entries = len(self._entries_paths_dict)
+        no_fire_entries = sum(1 for entry in self._entries_paths_list if not entry.is_fire())
+        fire_entries = sum(1 for entry in self._entries_paths_list if entry.is_fire())
+        total_entries = len(self._entries_paths_list)
 
         return no_fire_entries, fire_entries, total_entries
-    
-    
-    def split_dataset(self, source_path, destination_path, mode="classic", p=[0.8,0.2]):
-        """
-        If mode is "classic", it splits the dataset into train, validation and test sets.
-        If mode is "k-fold", it splits only the test. In this case other videos remain in the training set folder.
-        """
-        # set paths and the mivia percentage of videos which have to be put in the validation set
-        no_fire_original_frames_folder = source_path /'0'
-        fire_original_frames_folder = source_path / '1'
-        mivia_percentage = 0.8
-        
-        # create the destination folders
-        os.makedirs(destination_path / "TRAINING_SET" / "0", exist_ok=True)
-        os.makedirs(destination_path / "TRAINING_SET" / "1", exist_ok=True)
 
-        os.makedirs(train_splitted_annotations_path / "0", exist_ok=True)
-        os.makedirs(train_splitted_annotations_path / "1", exist_ok=True)
-
-        no_fires_folders = [folder_name for folder_name in os.listdir(no_fire_original_frames_folder) if
-                            os.path.isdir(os.path.join(no_fire_original_frames_folder, folder_name))]
-        
-
-        fires_folders = [folder_name for folder_name in os.listdir(fire_original_frames_folder) if
-                            os.path.isdir(os.path.join(fire_original_frames_folder, folder_name))]
-
-        random.shuffle(no_fires_folders)
-        random.shuffle(fires_folders)
-
-        (total_no_fires, total_fires, total) = self.count_entries()
-
-        # create thea list of entries for each category
-        mivia_fire_entries = []
-        custom_fire_entries = []
-        mivia_no_fire_entries = []
-        custom_no_fire_entries = []
-
-        for entry in self._entries_paths_dict.values():
-            if entry.is_fire():
-                if entry.is_mivia():
-                    mivia_fire_entries.append(entry)
-                else:
-                    custom_fire_entries.append(entry)
-            else:
-                if entry.is_mivia():
-                    mivia_no_fire_entries.append(entry)
-                else:
-                    custom_no_fire_entries.append(entry)
-
-        # if mode is "classic", it splits the dataset into train and validation
-        if mode == "classic":
-            # create the validation set folders
-            os.makedirs(destination_path / "VALIDATION_SET" / "0", exist_ok=True)
-            os.makedirs(destination_path / "VALIDATION_SET" / "1", exist_ok=True)
-            
-            os.makedirs(val_splitted_annotations_path / "0", exist_ok=True)
-            os.makedirs(val_splitted_annotations_path / "1", exist_ok=True)
-
-            # we have to compute the number of videos to put in the validation set from the total of the no fire videos
-            # and the total of the fire videos depending on the given percentage
-            no_fires_to_put_in_validation = int(total_no_fires * p[1])
-            # now on the total of videos for each catedory we have to compute how many of them have to come from the mivia dataset
-            mivia_no_fires_to_put_in_validation = int(no_fires_to_put_in_validation * mivia_percentage)
-            # if this percentage is higher than the total number of mivia available videos, we put all of them in the validation set and the
-            # remaining ones will come from the custom dataset
-            if mivia_no_fires_to_put_in_validation > len(mivia_no_fire_entries):
-                mivia_no_fires_to_put_in_validation = len(mivia_no_fire_entries)
-            custom_no_fires_to_put_in_validation = no_fires_to_put_in_validation - mivia_no_fires_to_put_in_validation
-
-            # we do the same for the fire videos
-            fires_to_put_in_validation = int(total_fires * p[1])
-            mivia_fires_to_put_in_validation = int(fires_to_put_in_validation * mivia_percentage)
-            if mivia_fires_to_put_in_validation > len(mivia_fire_entries):
-                mivia_fires_to_put_in_validation = len(mivia_fire_entries)
-            custom_fires_to_put_in_validation = fires_to_put_in_validation - mivia_fires_to_put_in_validation
-            
-            # create the lists of the validation set and the training set
-            no_fire_entries_validation = mivia_no_fire_entries[:mivia_no_fires_to_put_in_validation] + custom_no_fire_entries[:custom_no_fires_to_put_in_validation]
-            fire_entries_validation = mivia_fire_entries[:mivia_fires_to_put_in_validation] + custom_fire_entries[:custom_fires_to_put_in_validation]
-            no_fire_entries_training = mivia_no_fire_entries[mivia_no_fires_to_put_in_validation:] + custom_no_fire_entries[custom_no_fires_to_put_in_validation:]
-            fire_entries_training = mivia_fire_entries[mivia_fires_to_put_in_validation:] + custom_fire_entries[custom_fires_to_put_in_validation:]
-            
-            # iterate over the validation entries and copy them in the validation set folder
-            for entry in no_fire_entries_validation:
-                # obtain original frames path from video path
-                original_frames_path = entry.get_video_path().replace("VIDEOS", "ORIGINAL_FRAMES")
-                destination_frames_path = destination_path / "VALIDATION_SET" / "0" / entry.get_name()
-                shutil.copytree(original_frames_path, destination_frames_path)
-                shutil.copy(entry.get_annotation_path(), val_splitted_annotations_path / "0" / entry.get_name())
-                entry.set_frames_path(destination_frames_path)
-
-            for entry in fire_entries_validation:
-                original_frames_path = entry.get_video_path().replace("VIDEOS", "ORIGINAL_FRAMES")
-                destination_frames_path = destination_path / "VALIDATION_SET" / "1" / entry.get_name()
-                shutil.copytree(original_frames_path, destination_frames_path)
-                shutil.copy(entry.get_annotation_path(), val_splitted_annotations_path / "1" / entry.get_name())
-                entry.set_frames_path(destination_frames_path)
-                
-        else:
-            
-            no_fire_entries_training = mivia_no_fire_entries + custom_no_fire_entries
-            fire_entries_training = mivia_fire_entries + custom_fire_entries
-            
-        # iterate over the training entries and copy them in the training set folder
-        for entry in no_fire_entries_training:
-            # obtain original frames path from video path
-            original_frames_path = entry.get_video_path().replace("VIDEOS", "ORIGINAL_FRAMES")
-            destination_frames_path = destination_path / "TRAINING_SET" / "0" / entry.get_name()
-            shutil.copytree(original_frames_path, destination_frames_path)
-            shutil.copy(entry.get_annotation_path(), train_splitted_annotations_path / "0" / entry.get_name())
-            entry.set_frames_path(destination_frames_path)
-            
-        for entry in fire_entries_training:
-            original_frames_path = entry.get_video_path().replace("VIDEOS", "ORIGINAL_FRAMES")
-            destination_frames_path = destination_path / "TRAINING_SET" / "1" / entry.get_name()
-            shutil.copytree(original_frames_path, destination_frames_path)
-            shutil.copy(entry.get_annotation_path(), train_splitted_annotations_path / "1" / entry.get_name())
-            entry.set_frames_path(destination_frames_path)
-            
 
 def download_google_file(shader_url, output_name):
     id_url = "https://drive.google.com/uc?id=" + shader_url.split("/")[5]

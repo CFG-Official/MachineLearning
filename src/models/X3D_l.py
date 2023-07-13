@@ -32,7 +32,7 @@ class X3D_l(Model):
 
         # Replace the last layer for finetuning
         self.model.blocks[:-to_train].requires_grad_(False)
-        self.model.blocks[-1] = create_res_basic_head(in_features=192, out_features=num_classes, pool_kernel_size=(1, 6, 6))
+        self.model.blocks[-1] = create_res_basic_head(in_features=192, out_features=num_classes)#, pool_kernel_size=(1, 6, 6))
 
     def forward(self, x):
         # x è un batch di frame di video: B x T x C x H x W oppure T x C x H x W

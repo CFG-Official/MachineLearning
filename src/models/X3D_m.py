@@ -1,11 +1,11 @@
 import torch
 import torch.nn as nn
-from pytorchvideo.models.hub import x3d_l
+from pytorchvideo.models.hub import x3d_m
 import albumentations
 from models.model import Model
 from pytorchvideo.models import create_res_basic_head
 
-class X3D_l(Model):
+class X3D_m(Model):
     
     def __init__(self, num_classes=1, to_train=0):
         
@@ -26,9 +26,9 @@ class X3D_l(Model):
         ])
         # Model parameters
         if self.to_train is None:
-            self.model = x3d_l(pretrained=False)
+            self.model = x3d_m(pretrained=False)
         else:
-            self.model = x3d_l(pretrained=True)
+            self.model = x3d_m(pretrained=True)
 
         # Replace the last layer for finetuning
         self.model.blocks[:-to_train].requires_grad_(False)

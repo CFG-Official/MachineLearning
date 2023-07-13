@@ -20,7 +20,6 @@ class X3D_xs(Model):
         self.preprocessing = albumentations.Sequential([
             albumentations.SmallestMaxSize(side_size, always_apply=True),
             albumentations.CenterCrop(crop_size, crop_size, always_apply=True),
-            albumentations.ToTensor(),
             albumentations.Normalize(mean=mean,
                                         std=std,
                                         max_pixel_value=255.,

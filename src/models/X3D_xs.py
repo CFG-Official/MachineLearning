@@ -31,8 +31,8 @@ class X3D_xs(Model):
 
         # Replace the last layer for finetuning
         if to_train >= 0:
+            print("Frost some blocks...")
             self.model.blocks[:-to_train].requires_grad_(False)
-        # if to_train < 0: finetune all layers
         self.model.blocks[-1] = create_res_basic_head(in_features=192, out_features=num_classes, pool_kernel_size=(1, 6, 6))
 
     def forward(self, x):

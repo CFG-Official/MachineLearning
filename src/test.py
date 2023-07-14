@@ -305,9 +305,13 @@ Y_hat = Y_hat.cpu()
 # Compute precision, recall and f1 score
 precision = precision_score(Y, Y_hat)
 recall = recall_score(Y, Y_hat)
-D = sum(delays)/len(delays)
+if len(delays):
+    D = sum(delays)/len(delays) 
+else:
+    print("Can't calculate D because no fire detected in the test set")
 Dn = max(0, 60-D)/60
 
+print("Accuracy: {:.4f}".format((Y == Y_hat).float().mean().item()))
 print("Precision: {:.4f}".format(precision))
 print("Recall: {:.4f}".format(recall))
 print("F-score: {:.4f}".format(2 * precision * recall / (1e-10 + precision + recall)))

@@ -1,0 +1,14 @@
+{
+    "model": "x3d_xs",
+    "train_layers": -1,
+    "num_segments": 3,
+    "frames_per_segment": 4,
+    "batch_size": 64,
+    "learning_rate": 0.0001,
+    "num_epochs": 50,
+    "es_patience": 5,
+    "optimizer": "Adam",
+    "scheduler": "none",
+    "momentum": 0.9,
+    "lambda_reg": 0
+}

@@ -235,7 +235,7 @@ for video in os.listdir(args.videos):
     
     # 2)
     # If fire is detected, write on file the result of the classification
-    f = open(args.results+video+".rtf", "w")
+    f = open(args.results+video.split(".")[0]+".rtf", "w")
     if detector.get_classification() == 1:
         # TO DO: print data on file
         f.write(str(round(detector.get_frame()/fps)) + "," + ",".join(detector.get_labels()))
@@ -266,7 +266,7 @@ guard_time = 5 # seconds
 for video in os.listdir(args.videos):
 
     # Read the result file
-    result_file = open(args.results+video+".rtf", "r")
+    result_file = open(args.results+video.split(".")[0]+".rtf", "r")
     result = result_file.read()
     result_file.close()
 

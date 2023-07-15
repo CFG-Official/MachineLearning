@@ -15,6 +15,7 @@ from .X3D_s import X3D_s
 from .X3D_m import X3D_m
 from .X3D_l import X3D_l
 from .YOLO_temporal2 import YOLO_temporal2
+from .Mobilenet import MobileNet
 
 class FireDetectionModelFactory:
 
@@ -36,7 +37,7 @@ class FireDetectionModelFactory:
         'x3d_m': X3D_m,
         'x3d_l': X3D_l,
         'YOLO_temporal2': YOLO_temporal2,
-        
+        'mobilenet': MobileNet
     }
 
     @staticmethod

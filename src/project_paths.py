@@ -14,6 +14,7 @@ root_path = find_fire_detection_dir()
 
 project_root = find_fire_detection_dir()
 data_folder_path = project_root / "data"
+yolo_folder_path = project_root / "yolo_dataset"
 test_data_folder_path = project_root / "test_data"
 
 ## LEVEL 1

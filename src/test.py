@@ -13,6 +13,7 @@ from torchvision import transforms
 from pathlib import Path
 from pytorchvideo.models import create_res_basic_head
 from models.FireDetectionModelFactory import FireDetectionModelFactory
+from sklearn.metrics import precision_score, recall_score
 
 class Detector(object):
     """Define the object that made detection based on the past clips seen."""
@@ -120,6 +121,7 @@ def init_parameter():
     parser.add_argument("--model", type=str, default='x3d_xs', help="Model name")
     parser.add_argument("--clip_len", type=int, default=4, help="Length of a single clip")
     parser.add_argument("--clip_stride", type=int, default=2, help="Stride between clips")
+    parser.add_argument("--ground_truth", type=str, default='GT', help="Ground truth folder")
     args = parser.parse_args()
     return args
 
@@ -188,7 +190,6 @@ for video in os.listdir(args.videos):
                 with torch.no_grad():
                     out = output_function(model(input))
                     results[clip_counter] = out
-                    print("Clip ", clip_counter, " processed: " + str(results[clip_counter]))
 
                 # The next clip will start from the frame args.clip_stride
                 clip = clip[args.clip_stride:] # remove the first args.clip_stride frames
@@ -234,18 +235,87 @@ for video in os.listdir(args.videos):
     
     # 2)
     # If fire is detected, write on file the result of the classification
-    f = open(args.results+video+".txt", "w")
+    f = open(args.results+video.split(".")[0]+".rtf", "w")
     if detector.get_classification() == 1:
         # TO DO: print data on file
-        f.write(detector.get_frame() + "," + ",".join(detector.get_labels()))
-    else:
-        # If fire is not detected, result file will be empty but for DEBUG purposes
-        # we will write "No fire detected"
-        f.write("DEBUG: No fire detected")
-        f.write("\n")
-        f.write(str(detector._fire_clips))
-        f.write("\n")
-        f.write(str(detector._smoke_clips))
+        f.write(str(round(detector.get_frame()/fps)) + "," + ",".join(detector.get_labels()))
+    
+    # If fire is not detected, result file will be empty
+    #### DEBUG purposes ####
+    # Write "No fire detected"
+    #else:
+    # f.write("DEBUG: No fire detected")
+    # f.write("\n")
+    # f.write(str(detector._fire_clips))
+    # f.write("\n")
+    # f.write(str(detector._smoke_clips))
 
     ########################################################
     f.close()
+
+#### DEBUG: Compute metrics ####
+# For each video in the test set, we take the result file computed by the previous code
+# and we compare it with the ground truth file
+
+Y_hat = torch.zeros(len(os.listdir(args.videos))).to(device)
+Y = torch.zeros(len(os.listdir(args.videos))).to(device)
+delays = []
+
+video_counter = 0
+guard_time = 5 # seconds
+for video in os.listdir(args.videos):
+
+    # Read the result file
+    result_file = open(args.results+video.split(".")[0]+".rtf", "r")
+    result = result_file.read()
+    result_file.close()
+
+    # Read the ground truth file
+    gt_file = open(args.ground_truth+video.split(".")[0]+".rtf", "r")
+    gt = gt_file.read()
+    gt_file.close()
+
+    if len(gt): # if the ground truth file is not empty
+        # Fire is present in the video
+        # Get the frame in which the fire is present
+        g_frame = int(gt.split(",")[0])
+        Y[video_counter] = 1 # Fire is present in the video
+
+    if len(result): # if the result file is not empty
+        # Fire detected
+        # Get the frame in which the fire is detected
+        p_frame = int(result.split(",")[0])
+
+        if len(gt):
+            # If the fire is detected and present in the video
+            # Check if the detection is fast enough
+            if p_frame >= max(0, g_frame - guard_time):
+                # Detection is fast enough
+                Y_hat[video_counter] = 1
+                delays.append(abs(p_frame - g_frame))
+            else:
+                # Detection is not fast enough
+                Y_hat[video_counter] = 0 # Not necessary, already initialized to 0
+
+    video_counter += 1
+
+Y = Y.cpu()
+Y_hat = Y_hat.cpu()
+
+# Compute precision, recall and f1 score
+precision = precision_score(Y, Y_hat)
+recall = recall_score(Y, Y_hat)
+if len(delays):
+    D = sum(delays)/len(delays) 
+else:
+    print("Can't calculate D because no fire detected in the test set")
+Dn = max(0, 60-D)/60
+
+print("Accuracy: {:.4f}".format((Y == Y_hat).float().mean().item()))
+print("Precision: {:.4f}".format(precision))
+print("Recall: {:.4f}".format(recall))
+print("F-score: {:.4f}".format(2 * precision * recall / (1e-10 + precision + recall)))
+print("Detection mean error: {:.4f}".format(D))
+print("Detection delay: {:.4f}".format(Dn))
+    
+print("Final score numerator: {:.4f}".format(precision * recall * Dn))

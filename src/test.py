@@ -143,8 +143,11 @@ model.load_state_dict(torch.load(weight_path, map_location=torch.device("cpu")))
 model.eval()
 model = model.float().to(device)
 
+# DEBUG
+memory_per_video_occupancy = torch.zeros(len(os.listdir(args.videos)))
+
 # For all the test videos
-for video in os.listdir(args.videos):
+for video_index, video in enumerate(os.listdir(args.videos)):
     print("-"*50)
     print("Processing video ", video)
     print("-"*50)
@@ -242,6 +245,9 @@ for video in os.listdir(args.videos):
         # Print the time of the first frame of the fire
         f.write(str(round(detector.get_frame()/fps)))  # NOT NECESSARY -> + "," + ",".join(detector.get_labels()))
 
+    ### DEBUG: Store the memory usage ###
+    memory_per_video_occupancy[video_index] = torch.cuda.memory_allocated() / (1024 ** 2)
+
     ########################################################
     f.close()
 
@@ -329,3 +335,6 @@ print("Detection mean error: {:.4f}".format(D))
 print("Detection delay: {:.4f}".format(Dn))
     
 print("Final score numerator: {:.4f}".format(precision * recall * Dn))
+
+print("Mean memory usage for computation of each video: {:.4f} MB".format(memory_per_video_occupancy.mean()))
+

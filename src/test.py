@@ -239,8 +239,8 @@ for video in os.listdir(args.videos):
     # If fire is detected, write on file the result of the classification
     f = open(args.results+video.split(".")[0]+".txt", "w")
     if detector.get_classification() == 1:
-        # TO DO: print data on file
-        f.write(str(round(detector.get_frame()/fps)) + "," + ",".join(detector.get_labels()))
+        # Print the time of the first frame of the fire
+        f.write(str(round(detector.get_frame()/fps)))  # NOT NECESSARY -> + "," + ",".join(detector.get_labels()))
 
     ########################################################
     f.close()

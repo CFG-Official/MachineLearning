@@ -1,14 +1,14 @@
 {
-    "model": "x3d_xs",
+    "model": "mobilenet",
     "train_layers": -1,
-    "num_segments": 3,
-    "frames_per_segment": 4,
-    "batch_size": 64,
+    "num_segments": 6,
+    "frames_per_segment": 1,
+    "batch_size": 48,
     "learning_rate": 0.0001,
-    "num_epochs": 50,
+    "epochs": 30,
     "es_patience": 5,
     "optimizer": "Adam",
-    "scheduler": "none",
+    "scheduler": "None",
     "momentum": 0.9,
     "lambda_reg": 0
 }

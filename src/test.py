@@ -237,20 +237,10 @@ for video in os.listdir(args.videos):
     
     # 2)
     # If fire is detected, write on file the result of the classification
-    f = open(args.results+video.split(".")[0]+".rtf", "w")
+    f = open(args.results+video.split(".")[0]+".txt", "w")
     if detector.get_classification() == 1:
         # TO DO: print data on file
         f.write(str(round(detector.get_frame()/fps)) + "," + ",".join(detector.get_labels()))
-    
-    # If fire is not detected, result file will be empty
-    #### DEBUG purposes ####
-    # Write "No fire detected"
-    #else:
-    # f.write("DEBUG: No fire detected")
-    # f.write("\n")
-    # f.write(str(detector._fire_clips))
-    # f.write("\n")
-    # f.write(str(detector._smoke_clips))
 
     ########################################################
     f.close()
@@ -268,7 +258,7 @@ guard_time = 5 # seconds
 for video in os.listdir(args.videos):
 
     # Read the result file
-    result_file = open(args.results+video.split(".")[0]+".rtf", "r")
+    result_file = open(args.results+video.split(".")[0]+".txt", "r")
     result = result_file.read()
     result_file.close()
 

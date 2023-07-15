@@ -2,6 +2,7 @@
 tempCodeRunnerFile.py
 events.out*
 src\hyperparameters.json
+
 # Altrimenti crasha git
 weights/* 
 

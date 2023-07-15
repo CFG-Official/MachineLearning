@@ -235,7 +235,7 @@ for video in os.listdir(args.videos):
     
     # 2)
     # If fire is detected, write on file the result of the classification
-    f = open(args.results+video+".rtf", "w")
+    f = open(args.results+video.split(".")[0]+".rtf", "w")
     if detector.get_classification() == 1:
         # TO DO: print data on file
         f.write(str(round(detector.get_frame()/fps)) + "," + ",".join(detector.get_labels()))
@@ -266,7 +266,7 @@ guard_time = 5 # seconds
 for video in os.listdir(args.videos):
 
     # Read the result file
-    result_file = open(args.results+video+".rtf", "r")
+    result_file = open(args.results+video.split(".")[0]+".rtf", "r")
     result = result_file.read()
     result_file.close()
 
@@ -305,9 +305,13 @@ Y_hat = Y_hat.cpu()
 # Compute precision, recall and f1 score
 precision = precision_score(Y, Y_hat)
 recall = recall_score(Y, Y_hat)
-D = sum(delays)/len(delays)
+if len(delays):
+    D = sum(delays)/len(delays) 
+else:
+    print("Can't calculate D because no fire detected in the test set")
 Dn = max(0, 60-D)/60
 
+print("Accuracy: {:.4f}".format((Y == Y_hat).float().mean().item()))
 print("Precision: {:.4f}".format(precision))
 print("Recall: {:.4f}".format(recall))
 print("F-score: {:.4f}".format(2 * precision * recall / (1e-10 + precision + recall)))

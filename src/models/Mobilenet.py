@@ -53,7 +53,6 @@ class MobileNet(Model):
             # reshape input  to be (batch_size * timesteps, C, H, W)
             x = x.contiguous().view(batch_size * time_steps, C, H, W)
 
-        print(x.shape)
         x = self.model(x)
         return x
 

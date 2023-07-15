@@ -27,8 +27,10 @@ class Detector(object):
         self._incriminated_frame = None # None if no fire is detected
                                        # A frame index if fire is detected
 
-        self.SMOKE_THRESHOLD = 0.5
-        self.FIRE_THRESHOLD = 0.5
+        self.SMOKE_THRESHOLD = 0.3
+        self.FIRE_THRESHOLD = 0.3
+        self.CONSECUTIVE_FIRE_CLIPS = 1
+        self.CONSECUTIVE_SMOKE_CLIPS = 3
         self.CLIP_LEN = clip_len
         self.CLIP_STRIDE = clip_stride
 
@@ -85,7 +87,7 @@ class Detector(object):
         if len(self._fire_clips) > 0 or len(self._smoke_clips) >= 3:
             self._classification = 1
 
-        if len(self._fire_clips) > 0:
+        if len(self._fire_clips) >= self.CONSECUTIVE_FIRE_CLIPS:
             ### FIRE DETECTED ###
             # The incriminated frame is the center frame of the clip classified as fire
 
@@ -95,7 +97,7 @@ class Detector(object):
             last_frame_clip = first_frame_clip + self.CLIP_LEN
             # The incriminated frame is the center frame of the clip
             self._incriminated_frame = (first_frame_clip + last_frame_clip) // 2
-        elif len(self._smoke_clips) >= 3:
+        elif len(self._smoke_clips) >= self.CONSECUTIVE_SMOKE_CLIPS:
             ### SMOKE DETECTED ###
             # The incriminated frame is the first frame of the first clip classified as smoke
 
@@ -303,13 +305,31 @@ Y = Y.cpu()
 Y_hat = Y_hat.cpu()
 
 # Compute precision, recall and f1 score
-precision = precision_score(Y, Y_hat)
-recall = recall_score(Y, Y_hat)
+# Count the number of true positives, false positives and false negatives
+tp = 0
+fp = 0
+fn = 0
+tn = 0
+for i in range(len(Y)):
+    if Y[i] == 1 and Y_hat[i] == 1:
+        tp += 1
+    elif Y[i] == 0 and Y_hat[i] == 1:
+        fp += 1
+    elif Y[i] == 1 and Y_hat[i] == 0:
+        fn += 1
+    else:
+        tn += 1
+
+precision = tp/(tp+fp)
+recall = tp/(tp+fn)
 if len(delays):
     D = sum(delays)/len(delays) 
 else:
     print("Can't calculate D because no fire detected in the test set")
 Dn = max(0, 60-D)/60
+
+# Print results
+print("..:: RESULTS ::..")
 
 print("Accuracy: {:.4f}".format((Y == Y_hat).float().mean().item()))
 print("Precision: {:.4f}".format(precision))

@@ -9,6 +9,7 @@ class K_FOLD:
         self.train_splitted_annotations_path, self.val_splitted_annotations_path = train_splitted_annotations_path, val_splitted_annotations_path
         self.num_folds = num_folds
         self.executed_splits = 0
+        self.reset()
         self.create_splits()
         
     def create_splits(self):

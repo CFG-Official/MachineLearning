@@ -341,3 +341,9 @@ print("Final score numerator: {:.4f}".format(precision * recall * Dn))
 
 print("Mean memory usage for computation of each video: {:.4f} MB".format(memory_per_video_occupancy.mean()))
 
+import csv
+# Write results on csv file
+with open(args.results+"metrics.csv", "w") as f:
+    writer = csv.writer(f)
+    writer.writerow(["precision", "recall", "f-score", "dme", "dd", "fsn", "mmo"])
+    writer.writerow([precision, recall, 2 * precision * recall / (1e-10 + precision + recall), D, Dn, precision * recall * Dn, memory_per_video_occupancy.mean().item()])

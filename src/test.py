@@ -14,6 +14,8 @@ from pathlib import Path
 from pytorchvideo.models import create_res_basic_head
 from models.FireDetectionModelFactory import FireDetectionModelFactory
 from sklearn.metrics import precision_score, recall_score
+import contextlib
+import time 
 
 class Detector(object):
     """Define the object that made detection based on the past clips seen."""
@@ -107,6 +109,72 @@ class Detector(object):
             # The incriminated frame is the first frame of the clip
             self._incriminated_frame = first_frame_clip
 
+class Profile(contextlib.ContextDecorator):
+    """
+    Profile class for profiling execution time. 
+    Can be used as a decorator with @Profile() or as a context manager with 'with Profile():'.
+
+    Attributes
+    ----------
+    t : float
+        Accumulated time.
+    cuda : bool
+        Indicates whether CUDA is available.
+
+    Methods
+    -------
+    __enter__()
+        Starts timing.
+    __exit__(type, value, traceback)
+        Stops timing and updates accumulated time.
+    time()
+        Returns the current time, synchronizing with CUDA if available.
+    """
+    
+    def __init__(self, t=0.0):
+        """
+        Initializes the Profile class.
+
+        Parameters:
+        t : float
+            Initial accumulated time. Defaults to 0.0.
+        """
+        self.t = t  # Accumulated time
+        self.cuda = torch.cuda.is_available()  # Checks if CUDA is available
+
+    def __enter__(self):
+        """
+        Starts timing.
+        
+        Returns:
+        self
+        """
+        self.start = self.time()  # Start time
+        return self
+
+    def __exit__(self, type, value, traceback):
+        """
+        Stops timing and updates accumulated time.
+        
+        Parameters:
+        type, value, traceback : 
+            Standard parameters for an exit method in a context manager.
+        """
+        self.dt = self.time() - self.start  # Delta-time
+        self.t += self.dt  # Accumulates delta-time
+
+    def time(self):
+        """
+        Returns the current time, synchronizing with CUDA if available.
+        
+        Returns:
+        float
+            The current time.
+        """
+        if self.cuda:  # If CUDA is available
+            torch.cuda.synchronize()  # Synchronizes with CUDA
+        return time.time()  # Returns current time
+
 def apply_preprocessing(frames, preprocess):
     # Apply preprocessing to list of frames (copy paste of VideoFrameDataset)
     additional_targets = {f"image{i}": "image" for i in range(0, len(frames))}
@@ -143,7 +211,10 @@ model.load_state_dict(torch.load(weight_path, map_location=torch.device("cpu")))
 model.eval()
 model = model.float().to(device)
 
-# DEBUG
+## METRICS UTILS ##
+processed_frames = 0
+computation_time = 0.0
+dt = Profile()
 memory_per_video_occupancy = torch.zeros(len(os.listdir(args.videos)))
 
 # For all the test videos
@@ -193,8 +264,13 @@ for video_index, video in enumerate(os.listdir(args.videos)):
                 input = input.to(device)
                 
                 with torch.no_grad():
-                    out = output_function(model(input))
+                    with dt:
+                        out = output_function(model(input))
+                    computation_time += dt.dt
                     results[clip_counter] = out
+                
+                # Update frame processed
+                processed_frames += args.clip_len
 
                 # The next clip will start from the frame args.clip_stride
                 clip = clip[args.clip_stride:] # remove the first args.clip_stride frames
@@ -262,7 +338,9 @@ tn = 0
 delays = []
 
 video_counter = 0
-guard_time = 5 # seconds
+GUARD_TIME = 5 # seconds
+MEM_TARGET = 4000 # MB
+PFR_TARGET = 10 
 for video in os.listdir(args.videos):
 
     # Read the result file
@@ -283,7 +361,7 @@ for video in os.listdir(args.videos):
         # Fire is present in the video and fire is detected
         g_frame = int(gt.split(",")[0])
         p_frame = int(result.split(",")[0]) # NOT NECESSARY BECAUSE ONLY FRAME IN RESULT FILE
-        if p_frame >= max(0, g_frame - guard_time):
+        if p_frame >= max(0, g_frame - GUARD_TIME):
             # Detection is fast enough
             delays.append(abs(p_frame - g_frame))
             tp += 1
@@ -326,24 +404,30 @@ except:
     D = float("inf")
     Dn = 0
 
+f_score = 2 * precision * recall / (1e-10 + precision + recall)
+pfr = 1 /(computation_time / processed_frames)
+mem = memory_per_video_occupancy.mean().item()
 
+pfr_delta = max(0, PFR_TARGET/pfr - 1)
+mem_delta = max(0, mem/MEM_TARGET - 1)
+fds = (precision * recall * Dn) / ((1 + pfr_delta) * (1 + mem_delta))
 
 # Print results
 print("..:: RESULTS ::..")
 
 print("Precision: {:.4f}".format(precision))
 print("Recall: {:.4f}".format(recall))
-print("F-score: {:.4f}".format(2 * precision * recall / (1e-10 + precision + recall)))
-print("Detection mean error: {:.4f}".format(D))
-print("Detection delay: {:.4f}".format(Dn))
-    
-print("Final score numerator: {:.4f}".format(precision * recall * Dn))
+print("F-score: {:.4f}".format(f_score))
+print("Average notification delay: {:.4f}".format(D))
+print("Normalized average detection delay: {:.4f}".format(Dn))
+print("Processing frame rate: {:.4f}".format(pfr))
+print("Memory usage: {:.4f}".format(mem))
+print("Final detection score: {:.4f}".format(fds))
 
-print("Mean memory usage for computation of each video: {:.4f} MB".format(memory_per_video_occupancy.mean()))
 
 import csv
 # Write results on csv file
 with open(args.results+"metrics.csv", "w") as f:
     writer = csv.writer(f)
-    writer.writerow(["precision", "recall", "f-score", "dme", "dd", "fsn", "mmo"])
-    writer.writerow([precision, recall, 2 * precision * recall / (1e-10 + precision + recall), D, Dn, precision * recall * Dn, memory_per_video_occupancy.mean().item()])
+    writer.writerow(["precision", "recall", "f-score", "and", "nand", "pfr", "mem","fds"])
+    writer.writerow([precision, recall, f_score, D, Dn, pfr, mem, fds])

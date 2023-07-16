@@ -28,7 +28,7 @@ class Detector(object):
                                        # A frame index if fire is detected
 
         self.SMOKE_THRESHOLD = 0.3
-        self.FIRE_THRESHOLD = 0.3
+        self.FIRE_THRESHOLD = 0.5
         self.CONSECUTIVE_FIRE_CLIPS = 1
         self.CONSECUTIVE_SMOKE_CLIPS = 3
         self.CLIP_LEN = clip_len

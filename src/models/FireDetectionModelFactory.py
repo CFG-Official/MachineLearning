@@ -7,6 +7,7 @@ from .X3D_m import X3D_m
 from .X3D_l import X3D_l
 from .Mobilenet import MobileNet
 from .Efficientnet import EfficientNet
+from .resnet50 import ResNet50
 
 class FireDetectionModelFactory:
 
@@ -19,7 +20,8 @@ class FireDetectionModelFactory:
         'x3d_m': X3D_m,
         'x3d_l': X3D_l,
         'mobilenet': MobileNet,
-        'efficientnet': EfficientNet
+        'efficientnet': EfficientNet,
+        'resnet50': ResNet50
     }
 
     @staticmethod

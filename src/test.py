@@ -255,8 +255,10 @@ for video_index, video in enumerate(os.listdir(args.videos)):
 # For each video in the test set, we take the result file computed by the previous code
 # and we compare it with the ground truth file
 
-Y_hat = torch.zeros(len(os.listdir(args.videos))).to(device)
-Y = torch.zeros(len(os.listdir(args.videos))).to(device)
+tp = 0
+fp = 0
+fn = 0
+tn = 0
 delays = []
 
 video_counter = 0
@@ -273,61 +275,62 @@ for video in os.listdir(args.videos):
     gt = gt_file.read()
     gt_file.close()
 
-    if len(gt): # if the ground truth file is not empty
-        # Fire is present in the video
-        # Get the frame in which the fire is present
+    # TP: all the detections in(P)ositive videos for which 𝑝 ≥ 𝑚𝑎𝑥(0, 𝑔 − 𝛥𝑡)
+    # FP: all the detections occurringat any time in (N)egative videos
+    #  or in (P)ositivevideos for which 𝑝 < 𝑚𝑎𝑥(0, 𝑔 − 𝛥𝑡)
+    # FN: the set of positive videosfor which no fire detection occurs
+    if len(gt) and len(result):
+        # Fire is present in the video and fire is detected
         g_frame = int(gt.split(",")[0])
-        Y[video_counter] = 1 # Fire is present in the video
+        p_frame = int(result.split(",")[0]) # NOT NECESSARY BECAUSE ONLY FRAME IN RESULT FILE
+        if p_frame >= max(0, g_frame - guard_time):
+            # Detection is fast enough
+            delays.append(abs(p_frame - g_frame))
+            tp += 1
+        else:
+            # Detection is not fast enough
+            fp += 1
+    elif len(result) and not len(gt):
+        # Fire is not present in the video and fire is detected
+        fp += 1
+    elif len(gt) and not len(result):
+        # Fire is present in the video and fire is not detected
+        fn += 1
+    elif not len(gt) and not len(result):
+        # Fire is not present in the video and fire is not detected
+        tn += 1
+    else:
+        raise ValueError("Something went wrong")
 
-    if len(result): # if the result file is not empty
-        # Fire detected
-        # Get the frame in which the fire is detected
-        p_frame = int(result.split(",")[0])
-
-        if len(gt):
-            # If the fire is detected and present in the video
-            # Check if the detection is fast enough
-            if p_frame >= max(0, g_frame - guard_time):
-                # Detection is fast enough
-                Y_hat[video_counter] = 1
-                delays.append(abs(p_frame - g_frame))
-            else:
-                # Detection is not fast enough
-                Y_hat[video_counter] = 0 # Not necessary, already initialized to 0
 
     video_counter += 1
 
-Y = Y.cpu()
-Y_hat = Y_hat.cpu()
 
 # Compute precision, recall and f1 score
 # Count the number of true positives, false positives and false negatives
-tp = 0
-fp = 0
-fn = 0
-tn = 0
-for i in range(len(Y)):
-    if Y[i] == 1 and Y_hat[i] == 1:
-        tp += 1
-    elif Y[i] == 0 and Y_hat[i] == 1:
-        fp += 1
-    elif Y[i] == 1 and Y_hat[i] == 0:
-        fn += 1
-    else:
-        tn += 1
 
-precision = tp/(tp+fp)
-recall = tp/(tp+fn)
-if len(delays):
+try:
+    precision = tp/(tp+fp)
+except ZeroDivisionError:
+    precision = 0
+try:
+    recall = tp/(tp+fn)
+except ZeroDivisionError:
+    recall = 0
+
+try:
     D = sum(delays)/len(delays) 
-else:
+    Dn = max(0, 60-D)/60
+except:
     print("Can't calculate D because no fire detected in the test set")
-Dn = max(0, 60-D)/60
+    D = float("inf")
+    Dn = 0
+
+
 
 # Print results
 print("..:: RESULTS ::..")
 
-print("Accuracy: {:.4f}".format((Y == Y_hat).float().mean().item()))
 print("Precision: {:.4f}".format(precision))
 print("Recall: {:.4f}".format(recall))
 print("F-score: {:.4f}".format(2 * precision * recall / (1e-10 + precision + recall)))

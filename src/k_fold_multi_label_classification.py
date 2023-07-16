@@ -107,13 +107,19 @@ class K_FOLD_multi_label(K_FOLD):
 if __name__ == "__main__":
     # this is just a test to see if the code works
     k_fold = K_FOLD_multi_label(train_splitted_frames_path = train_splitted_frames_path, train_splitted_annotations_path = train_splitted_annotations_path, val_splitted_frames_path = val_splitted_frames_path, val_splitted_annotations_path = val_splitted_annotations_path, num_folds = 10)
-    k_fold.reset()
-    # k_fold.create_splits()
-    # # print the splits
-    # print("folders_00: " + str(k_fold.folders_00))
-    # print("folders_10: " + str(k_fold.folders_10))
-    # print("folders_01: " + str(k_fold.folders_01))
-    # print("folders_11: " + str(k_fold.folders_11))
+    # print the splits
+    print("length: " + str(len(k_fold.folders_00)))
+    for i in range(10):
+        print("-- length: " + str(len(k_fold.folders_00[i])))
+    print("length: " + str(len(k_fold.folders_10)))
+    for i in range(10):
+        print("-- length: " + str(len(k_fold.folders_10[i])))
+    print("length: " + str(len(k_fold.folders_01)))
+    for i in range(10):
+        print("-- length: " + str(len(k_fold.folders_01[i])))
+    print("length: " + str(len(k_fold.folders_11)))
+    for i in range(10):
+        print("-- length: " + str(len(k_fold.folders_11[i])))
     # for i in range(10):
     #     k_fold.split()
     #     input("Press Enter to continue...")

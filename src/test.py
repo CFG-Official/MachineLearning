@@ -411,10 +411,12 @@ mem = memory_per_video_occupancy.mean().item()
 pfr_delta = max(0, PFR_TARGET/pfr - 1)
 mem_delta = max(0, mem/MEM_TARGET - 1)
 fds = (precision * recall * Dn) / ((1 + pfr_delta) * (1 + mem_delta))
+accuracy = (tp + tn) / (tp + tn + fp + fn)
 
 # Print results
 print("..:: RESULTS ::..")
 
+print("Accuracy: {:.4f}".format(accuracy))
 print("Precision: {:.4f}".format(precision))
 print("Recall: {:.4f}".format(recall))
 print("F-score: {:.4f}".format(f_score))
@@ -429,5 +431,5 @@ import csv
 # Write results on csv file
 with open(args.results+"metrics.csv", "w") as f:
     writer = csv.writer(f)
-    writer.writerow(["precision", "recall", "f-score", "and", "nand", "pfr", "mem","fds"])
-    writer.writerow([precision, recall, f_score, D, Dn, pfr, mem, fds])
+    writer.writerow(["accuracy", "precision", "recall", "f-score", "and", "nand", "pfr", "mem","fds"])
+    writer.writerow([accuracy, precision, recall, f_score, D, Dn, pfr, mem, fds])

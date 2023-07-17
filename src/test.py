@@ -104,13 +104,8 @@ class Detector(object):
                 first_clip_index = self._anomaly_clips[label][-self._consecutiveness[label]][0]
                 last_clip_index = self._anomaly_clips[label][-1][0]
 
-                # Get the first frame index of the first clip
-                first_frame_index = first_clip_index * self.CLIP_STRIDE
                 # Get the last frame index of the last clip
-                last_frame_index = last_clip_index * self.CLIP_STRIDE + self.CLIP_LEN - 1
-
-                # Get the center frame index
-                self._incriminated_frame = (first_frame_index + last_frame_index) // 2
+                self._incriminated_frame = last_clip_index * self.CLIP_STRIDE + self.CLIP_LEN - 1
 
                 return
 
@@ -235,6 +230,7 @@ processed_frames = 0
 computation_time = 0.0
 dt = Profile()
 memory_per_video_occupancy = torch.zeros(len(os.listdir(args.videos)))
+fps_dict = {}
 
 # For all the test videos
 for video_index, video in enumerate(os.listdir(args.videos)):
@@ -250,6 +246,7 @@ for video_index, video in enumerate(os.listdir(args.videos)):
     cap = cv2.VideoCapture(video_path)
     # Get frame per second 
     fps = cap.get(cv2.CAP_PROP_FPS) 
+    fps_dict[video] = fps
     # Get total number of frames
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) 
     # Get number of clips
@@ -269,8 +266,10 @@ for video_index, video in enumerate(os.listdir(args.videos)):
 
     while ret:
         ret, img = cap.read()
+        
         # Here you should add your code for applying your method
         if ret:
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
             # add to the list of frames
             clip.append(np.asarray(img)) # append the frame in list
             frame_counter += 1
@@ -281,6 +280,7 @@ for video_index, video in enumerate(os.listdir(args.videos)):
                 input = apply_preprocessing(clip, model.preprocessing)
                 input =  torch.stack([transforms.functional.to_tensor(input[k])
                                 for k in input.keys()]) 
+
                 input = input.to(device)
                 
                 with torch.no_grad():
@@ -292,22 +292,19 @@ for video_index, video in enumerate(os.listdir(args.videos)):
                 # Update frame processed
                 processed_frames += args.clip_len
 
+                # Check if fire is detected basing on past detection
+                detector.step(results[clip_counter], clip_counter)
+                if detector.get_classification() == 1:
+                    break
+
                 # The next clip will start from the frame args.clip_stride
                 clip = clip[args.clip_stride:] # remove the first args.clip_stride frames
 
                 frame_counter = args.clip_len - args.clip_stride
                 clip_counter += 1
 
-                # Check if fire is detected basing on past detection
-                detector.step(results[clip_counter-1], clip_counter-1)
-                if detector.get_classification() == 1:
-                    # Fire detected
-                    break
-                
-
         ########################################################
     cap.release()
-    print("Processed frames: ", processed_frames)
 
     # Here we are if:
     # 1) the video is finished
@@ -342,6 +339,8 @@ for video_index, video in enumerate(os.listdir(args.videos)):
     
     # 2)
     # If fire is detected, write on file the result of the classification
+    if not os.path.exists(args.results):
+        os.makedirs(args.results)
     f = open(args.results+video.split(".")[0]+".txt", "w")
     if detector.get_classification() == 1:
         # Print the time of the first frame of the fire
@@ -385,7 +384,7 @@ for video in os.listdir(args.videos):
     # FN: the set of positive videosfor which no fire detection occurs
     if len(gt) and len(result):
         # Fire is present in the video and fire is detected
-        g_frame = int(gt.split(",")[0])
+        g_frame = int(gt.split(",")[0])//fps_dict[video]
         p_frame = int(result.split(",")[0]) # NOT NECESSARY BECAUSE ONLY FRAME IN RESULT FILE
         if p_frame >= max(0, g_frame - GUARD_TIME):
             # Detection is fast enough

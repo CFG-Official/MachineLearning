@@ -212,12 +212,18 @@ model_name = str(args.model)
 weight_path = Path("../weights/" + str(args.model) + ".pth")
 output_function = nn.Sigmoid()
 pad_strategy = "duplicate"
-labels = ["Fire", "Smoke"]
-# labels = ["Fire"]
-thresholds_map = {"Fire": 0.5, "Smoke": 0.5}
-# thresholds_map = {"Fire": 0.5}
-consecutiveness_map = {"Fire": 1, "Smoke": 3}
-# consecutiveness_map = {"Fire": 1}
+
+testing_mode = "multi-label"
+
+testing_params = {  "single-label": 
+                        ("Fire", {"Fire": 0.5}, {"Fire": 1}),
+                    
+                    "multi-label":
+                        (["Fire", "Smoke"], {"Fire": 0.5, "Smoke": 0.5}, {"Fire": 1, "Smoke": 3})
+
+                }
+
+labels, thresholds_map, consecutiveness_map = testing_params[testing_mode]
 
 model = FireDetectionModelFactory.create_model(model_name, num_classes=len(labels), to_train=0)
 model.load_state_dict(torch.load(weight_path, map_location=torch.device("cpu")))

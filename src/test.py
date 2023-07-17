@@ -203,7 +203,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model_name = str(args.model)
 weight_path = Path("../weights/" + str(args.model) + ".pth")
 output_function = nn.Sigmoid()
-pad_strategy = "zeros"
+pad_strategy = "duplicate"
 labels = ["Fire", "Smoke"]
 
 model = FireDetectionModelFactory.create_model(model_name, num_classes=len(labels), to_train=0)
@@ -256,6 +256,7 @@ for video_index, video in enumerate(os.listdir(args.videos)):
             clip.append(np.asarray(img)) # append the frame in list
             frame_counter += 1
 
+
             # When a clip is complete, we apply the model to it
             if frame_counter == args.clip_len:
                 input = apply_preprocessing(clip, model.preprocessing)
@@ -274,6 +275,7 @@ for video_index, video in enumerate(os.listdir(args.videos)):
 
                 # The next clip will start from the frame args.clip_stride
                 clip = clip[args.clip_stride:] # remove the first args.clip_stride frames
+
                 frame_counter = args.clip_len - args.clip_stride
                 clip_counter += 1
 
@@ -286,6 +288,7 @@ for video_index, video in enumerate(os.listdir(args.videos)):
 
         ########################################################
     cap.release()
+    print("Processed frames: ", processed_frames)
 
     # Here we are if:
     # 1) the video is finished
@@ -295,13 +298,17 @@ for video_index, video in enumerate(os.listdir(args.videos)):
     # If the video is finished but no fire is detected, check if the last clip is complete
     # If it is not complete, we need to complete it with the last frames
     # After that, a last check for fire detection is performed
-    if clip_counter < num_clips and detector.get_classification() == 0:
+
+    # Second condition to avoid bug of empty clip
+    if clip_counter < num_clips and len(clip) > 0 and detector.get_classification() == 0 and frame_counter == args.clip_len:
+        print(frame_counter)
         
         if pad_strategy == "duplicate":
             # STRATEGY 1: DUPLICATE LAST FRAME
             clip.extend([clip[-1]] * (args.clip_len - frame_counter))
         elif pad_strategy == "zeros":
             # STRATEGY 2: PAD WITH ZEROS
+            print(len(clip))
             clip.extend([np.zeros(clip[0].shape)] * (args.clip_len - frame_counter)) # PAD FRAME
         else:
             raise ValueError("Invalid padding strategy {}".format(pad_strategy))
@@ -321,13 +328,13 @@ for video_index, video in enumerate(os.listdir(args.videos)):
         # Print the time of the first frame of the fire
         f.write(str(round(detector.get_frame()/fps)))  # NOT NECESSARY -> + "," + ",".join(detector.get_labels()))
 
-    ### DEBUG: Store the memory usage ###
+    ### METRIC: Store the memory usage ###
     memory_per_video_occupancy[video_index] = torch.cuda.memory_allocated() / (1024 ** 2)
 
     ########################################################
     f.close()
 
-#### DEBUG: Compute metrics ####
+#### METRIC: Compute metrics ####
 # For each video in the test set, we take the result file computed by the previous code
 # and we compare it with the ground truth file
 
@@ -411,10 +418,12 @@ mem = memory_per_video_occupancy.mean().item()
 pfr_delta = max(0, PFR_TARGET/pfr - 1)
 mem_delta = max(0, mem/MEM_TARGET - 1)
 fds = (precision * recall * Dn) / ((1 + pfr_delta) * (1 + mem_delta))
+accuracy = (tp + tn) / (tp + tn + fp + fn)
 
 # Print results
 print("..:: RESULTS ::..")
 
+print("Accuracy: {:.4f}".format(accuracy))
 print("Precision: {:.4f}".format(precision))
 print("Recall: {:.4f}".format(recall))
 print("F-score: {:.4f}".format(f_score))
@@ -429,5 +438,5 @@ import csv
 # Write results on csv file
 with open(args.results+"metrics.csv", "w") as f:
     writer = csv.writer(f)
-    writer.writerow(["precision", "recall", "f-score", "and", "nand", "pfr", "mem","fds"])
-    writer.writerow([precision, recall, f_score, D, Dn, pfr, mem, fds])
+    writer.writerow(["accuracy", "precision", "recall", "f-score", "and", "nand", "pfr", "mem","fds"])
+    writer.writerow([accuracy, precision, recall, f_score, D, Dn, pfr, mem, fds])

@@ -21,11 +21,26 @@ class ResNet50(Model):
         
         self.model = torch.hub.load('pytorch/vision:v0.10.0', 'resnet50', pretrained=True)
 
-        for param in self.model.parameters():
-            param.requires_grad = True        
+        self.layers = [self.model.conv1,
+                   self.model.bn1,
+                   self.model.layer1,
+                   self.model.layer2,
+                   self.model.layer3,
+                   self.model.layer4]
+
+        for layer in self.layers:
+            for param in layer.parameters():
+                param.requires_grad = False
+
+        for layer in self.layers[-to_train:]:
+            for param in layer.parameters():
+                param.requires_grad = True    
         
+
+
         self.model.fc = nn.Linear(in_features=2048, out_features=num_classes, bias=True)
-        
+        self.model.avgpool.requires_grad = True
+        self.model.fc.requires_grad = True
 
     def forward(self, x):
         # x must be (batch_size, channels, height, width) or (channels, height, width) to go

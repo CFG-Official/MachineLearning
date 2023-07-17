@@ -200,6 +200,7 @@ def init_parameter():
     parser.add_argument("--clip_len", type=int, default=4, help="Length of a single clip")
     parser.add_argument("--clip_stride", type=int, default=2, help="Stride between clips")
     parser.add_argument("--ground_truth", type=str, default='GT', help="Ground truth folder")
+    parser.add_argument("--mode", type=str, default='multi', help="Single or multi class")
     args = parser.parse_args()
     return args
 
@@ -212,14 +213,19 @@ model_name = str(args.model)
 weight_path = Path("../weights/" + str(args.model) + ".pth")
 output_function = nn.Sigmoid()
 pad_strategy = "duplicate"
-labels = ["Fire", "Smoke"]
-# labels = ["Fire"]
-thresholds_map = {"Fire": 0.5, "Smoke": 0.5}
-# thresholds_map = {"Fire": 0.5}
-consecutiveness_map = {"Fire": 1, "Smoke": 3}
-# consecutiveness_map = {"Fire": 1}
+
+if args.mode == "multi":
+    labels = ["Fire", "Smoke"]
+    thresholds_map = {"Fire": 0.5, "Smoke": 0.5}
+    consecutiveness_map = {"Fire": 1, "Smoke": 3}
+elif args.mode == "single":
+    labels = ["Fire"]
+    thresholds_map = {"Fire": 0.5}
+    consecutiveness_map = {"Fire": 1}
+
 
 model = FireDetectionModelFactory.create_model(model_name, num_classes=len(labels), to_train=0)
+print("Loading weights from ", weight_path)
 model.load_state_dict(torch.load(weight_path, map_location=torch.device("cpu")))
 model.eval()
 model = model.float().to(device)

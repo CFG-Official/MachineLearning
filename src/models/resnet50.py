@@ -13,7 +13,7 @@ class ResNet50(Model):
         
         self.preprocessing = Sequential([
                             Resize(height=256, width=256, always_apply=True),
-                            CenterCrop(height=256, width=256, always_apply=True),
+                            #CenterCrop(height=256, width=256, always_apply=True),
                             Normalize(mean=[0.485, 0.456, 0.406],
                                         std=[0.229, 0.224, 0.225],
                                         max_pixel_value=255.,
@@ -52,6 +52,6 @@ class ResNet50(Model):
 
             # reshape input  to be (batch_size * timesteps, C, H, W)
             x = x.contiguous().view(batch_size * time_steps, C, H, W)
-
+            
         x = self.model(x)
         return x

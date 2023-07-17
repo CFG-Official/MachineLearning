@@ -10,5 +10,5 @@
     "optimizer": "Adam",
     "scheduler": "None",
     "momentum": 0.9,
-    "lambda_reg": 0
+    "lambda_reg": 0.00001
 }

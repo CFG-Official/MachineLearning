@@ -1,6 +1,7 @@
 import torch.nn as nn
 from albumentations import Resize, CenterCrop, Normalize, Sequential
 from pytorchvideo.models.hub import i3d_r50
+from pytorchvideo.models import create_res_basic_head
 from models.model import Model
 
 class I3D_R50(Model):
@@ -36,12 +37,13 @@ class I3D_R50(Model):
                 for param in block.parameters():
                     param.requires_grad = True
         
-        model.fc = nn.Linear(2048, self.num_classes)
+        model.blocks[-1] = create_res_basic_head(in_features=2048, out_features=self.num_classes, pool_kernel_size=(1, 7, 7))
+        model.fc = nn.Linear(self.num_classes, self.num_classes)
         
         self.model = model
 
     def forward(self, x):
+        if len(x.size()) == 4:
+            x = x.unsqueeze(0)
         x = x.permute(0, 2, 1, 3, 4)
-        output = self.model(x)
-        # return just the first dimension, i.e. the batch size
-        return output[:, 0]
+        return self.model(x)

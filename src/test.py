@@ -20,21 +20,29 @@ import time
 class Detector(object):
     """Define the object that made detection based on the past clips seen."""
 
-    def __init__(self, clip_len, clip_stride):
-        # These lists will contain tuples made by (clip_index, confidence)
-        self._fire_clips = []
-        self._smoke_clips = []
-        self._classification = 0 # 0 = ACTUALLY classified as no fire,
-                                # 1 = classified as fire
-        self._incriminated_frame = None # None if no fire is detected
-                                       # A frame index if fire is detected
+    def __init__(self, clip_len, clip_stride, thresholds, consucutiveness):
+        """Initialize the detector.
 
-        self.SMOKE_THRESHOLD = 0.3
-        self.FIRE_THRESHOLD = 0.5
-        self.CONSECUTIVE_FIRE_CLIPS = 1
-        self.CONSECUTIVE_SMOKE_CLIPS = 3
+        Args:
+            clip_len (int): length of the clip in frames
+            clip_stride (int): stride of the clip in frames
+            thresholds (dict): map label -> threshold
+            consucutiveness (dict): map label -> number of consecutive clips to classify as label
+        """
+        # These lists will contain tuples made by (clip_index, confidence)
+        self._labels = list(thresholds.keys()) # List of labels in order of fire strongness
+        self._classification = 0 # The ACTUALLY classification of the video, default 0
+        self._incriminated_frame = None # None if no fire is detected
+                                        # A frame index if fire is detected
+
+        # Define a dict that maps label -> list of tuples (clip_index, confidence)
+        self._anomaly_clips = {label: [] for label in self._labels}
+        
         self.CLIP_LEN = clip_len
         self.CLIP_STRIDE = clip_stride
+
+        self._thresholds = thresholds # Map label -> threshold
+        self._consecutiveness = consucutiveness # Map label -> number of consecutive clips to classify as label
 
 
     def step(self, clip_result, clip_index):
@@ -43,10 +51,10 @@ class Detector(object):
         Args:
             clip_result (torch.tensor): tensor of shape (1, 2) containing the probability of fire and smoke labels
         """
-        if clip_result[0] >= self.FIRE_THRESHOLD:
-            self.__add_fire_clip(clip_index, clip_result[0])
-        if clip_result[1] >= self.SMOKE_THRESHOLD:
-            self.__add_smoke_clip(clip_index, clip_result[1])
+        for i in range(len(self._labels)):
+            label = self._labels[i]
+            if clip_result[i] >= self._thresholds[label]:
+                self.__add_clip(label, clip_index, clip_result[i])
         
         self.__state_update()
 
@@ -61,10 +69,11 @@ class Detector(object):
             list: list of labels. Example: ["Fire", "Smoke"]
         """
         if self.get_classification() == 0:
-            raise ValueError("No fire detected")
-        labels = []
-        if len(self._fire_clips) > 0: labels.append("Fire")
-        if len(self._smoke_clips) > 0: labels.append("Smoke")
+            raise ValueError("No anomaly detected")
+        video_labels = []
+        for label in self._labels:
+            if len(self._anomaly_clips[label]) > self._consecutiveness[label]:
+                video_labels.append(label)
 
         return labels
         
@@ -75,39 +84,38 @@ class Detector(object):
         """Get the incriminated frame."""
         return self._incriminated_frame
 
-    def __add_fire_clip(self, clip_index, confidence):
-        self._fire_clips.append((clip_index, confidence))
-    
-    def __add_smoke_clip(self, clip_index, confidence):
-        self._smoke_clips.append((clip_index, confidence))
+    def __add_clip(self, label, clip_index, confidence):
+        self._anomaly_clips[label].append((clip_index, confidence))
 
     def __state_update(self):
         """Update the state of the detector based on the clips seen so far."""
         # A video is classified as fire if 3 clips have labels smoke
         # Or if just a clip has fire label
         
-        if len(self._fire_clips) > 0 or len(self._smoke_clips) >= 3:
-            self._classification = 1
+        # if some list of clips is longer of the consecutiveness threshold mark as fire
+        for label in self._labels:
+            if len(self._anomaly_clips[label]) >= self._consecutiveness[label]:
+                self._classification = 1
 
-        if len(self._fire_clips) >= self.CONSECUTIVE_FIRE_CLIPS:
-            ### FIRE DETECTED ###
-            # The incriminated frame is the center frame of the clip classified as fire
+                # POLICY: Incriminated frame is the center frame of the clip obtained by
+                # the last "consecutiveness threshold" clips
 
-            clip_index = self._fire_clips[-1][0] # Last (and only) clip classified as fire
-            # Get the first frame of the clip
-            first_frame_clip = clip_index * self.CLIP_STRIDE
-            last_frame_clip = first_frame_clip + self.CLIP_LEN
-            # The incriminated frame is the center frame of the clip
-            self._incriminated_frame = (first_frame_clip + last_frame_clip) // 2
-        elif len(self._smoke_clips) >= self.CONSECUTIVE_SMOKE_CLIPS:
-            ### SMOKE DETECTED ###
-            # The incriminated frame is the first frame of the first clip classified as smoke
+                # Get the first and last clip index of the last "consecutiveness threshold" clips
+                first_clip_index = self._anomaly_clips[label][-self._consecutiveness[label]][0]
+                last_clip_index = self._anomaly_clips[label][-1][0]
 
-            clip_index = self._smoke_clips[0][0] # First clip classified as smoke
-            # Get the first frame of the clip
-            first_frame_clip = clip_index * self.CLIP_STRIDE
-            # The incriminated frame is the first frame of the clip
-            self._incriminated_frame = first_frame_clip
+                # Get the first frame index of the first clip
+                first_frame_index = first_clip_index * self.CLIP_STRIDE
+                # Get the last frame index of the last clip
+                last_frame_index = last_clip_index * self.CLIP_STRIDE + self.CLIP_LEN - 1
+
+                # Get the center frame index
+                self._incriminated_frame = (first_frame_index + last_frame_index) // 2
+
+                return
+
+                
+            
 
 class Profile(contextlib.ContextDecorator):
     """
@@ -192,6 +200,7 @@ def init_parameter():
     parser.add_argument("--clip_len", type=int, default=4, help="Length of a single clip")
     parser.add_argument("--clip_stride", type=int, default=2, help="Stride between clips")
     parser.add_argument("--ground_truth", type=str, default='GT', help="Ground truth folder")
+    parser.add_argument("--mode", type=str, default='multi', help="Single or multi class")
     args = parser.parse_args()
     return args
 
@@ -204,9 +213,19 @@ model_name = str(args.model)
 weight_path = Path("../weights/" + str(args.model) + ".pth")
 output_function = nn.Sigmoid()
 pad_strategy = "duplicate"
-labels = ["Fire", "Smoke"]
+
+if args.mode == "multi":
+    labels = ["Fire", "Smoke"]
+    thresholds_map = {"Fire": 0.5, "Smoke": 0.5}
+    consecutiveness_map = {"Fire": 1, "Smoke": 3}
+elif args.mode == "single":
+    labels = ["Fire"]
+    thresholds_map = {"Fire": 0.5}
+    consecutiveness_map = {"Fire": 1}
+
 
 model = FireDetectionModelFactory.create_model(model_name, num_classes=len(labels), to_train=0)
+print("Loading weights from ", weight_path)
 model.load_state_dict(torch.load(weight_path, map_location=torch.device("cpu")))
 model.eval()
 model = model.float().to(device)
@@ -246,7 +265,7 @@ for video_index, video in enumerate(os.listdir(args.videos)):
     clip = []
     frame_counter = 0
     clip_counter = 0
-    detector = Detector(args.clip_len, args.clip_stride)
+    detector = Detector(args.clip_len, args.clip_stride, thresholds_map, consecutiveness_map)
 
     while ret:
         ret, img = cap.read()

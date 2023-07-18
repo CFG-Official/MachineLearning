@@ -201,9 +201,12 @@ def init_parameter():
 
 args = init_parameter()
 
-torch.cuda.empty_cache() # clear memory
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+if device.type == "cuda":
+    torch.cuda.empty_cache() # clear memory
+
+
 model_name = str(args.model)
 weight_path = Path("../weights/" + str(args.model) + ".pth")
 output_function = nn.Sigmoid()
@@ -384,7 +387,7 @@ for video in os.listdir(args.videos):
     # FN: the set of positive videosfor which no fire detection occurs
     if len(gt) and len(result):
         # Fire is present in the video and fire is detected
-        g_frame = int(gt.split(",")[0])//fps_dict[video]
+        g_frame = int(gt.split(",")[0])#//fps_dict[video]
         p_frame = int(result.split(",")[0]) # NOT NECESSARY BECAUSE ONLY FRAME IN RESULT FILE
         if p_frame >= max(0, g_frame - GUARD_TIME):
             # Detection is fast enough

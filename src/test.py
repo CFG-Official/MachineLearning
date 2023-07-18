@@ -57,8 +57,7 @@ elif mode == "single":
     thresholds_map = {"Fire": 0.5} # TODO: validate it
     consecutiveness_map = {"Fire": 1} # TODO: validate it
 
-FIRE = 1 # the class of a video that contains fire/smoke
-NO_FIRE = 0 # the class of a video that does not contain fire or smoke
+
 
 # Preparing the model
 model = FireDetectionModelFactory.create_model(model_name, num_classes=len(labels), to_train=0)
@@ -109,7 +108,7 @@ for video_index, video in enumerate(os.listdir(args.videos)):
 
                 # Check if fire is detected basing on past detection
                 detector.step(out, clip_counter)
-                if detector.get_classification() == FIRE:
+                if detector.get_classification() == Detector.FIRE:
                     break
 
                 # The next clip will start from the frame clip_stride
@@ -129,7 +128,7 @@ for video_index, video in enumerate(os.listdir(args.videos)):
     # If the video is finished but no fire is detected, check if the last clip is complete
     # If it is not complete, we need to complete it with the last frames
     # After that, a last check for fire detection is performed
-    if clip_counter < num_clips and len(clip) > 0 and detector.get_classification() == NO_FIRE: # TODO: check if it is correct
+    if clip_counter < num_clips and len(clip) > 0 and detector.get_classification() == Detector.NO_FIRE: # TODO: check if it is correct
 
         if pad_strategy == "duplicate":
             # STRATEGY 1: DUPLICATE LAST FRAME
@@ -144,7 +143,7 @@ for video_index, video in enumerate(os.listdir(args.videos)):
         input = apply_preprocessing(clip, model.preprocessing)
         input =  torch.stack([transforms.functional.to_tensor(input[k])
                                 for k in input.keys()]) 
-        input_tensor = torch.stack(input).to(device)
+        input_tensor = input.to(device)
         with torch.no_grad():
             out = output_function(model(input_tensor))
 
@@ -160,7 +159,7 @@ for video_index, video in enumerate(os.listdir(args.videos)):
     results_file = os.path.join(args.results, video_name + ".txt")
 
     f = open(results_file, "w")
-    if detector.get_classification() == FIRE:
+    if detector.get_classification() == Detector.FIRE:
         # Print the time of the first frame of the fire
         second_of_detection = math.floor(detector.get_frame()/fps)
         f.write(str(second_of_detection))

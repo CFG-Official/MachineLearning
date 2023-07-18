@@ -128,27 +128,33 @@ for video_index, video in enumerate(os.listdir(args.videos)):
     # If the video is finished but no fire is detected, check if the last clip is complete
     # If it is not complete, we need to complete it with the last frames
     # After that, a last check for fire detection is performed
-    if clip_counter < num_clips and len(clip) > 0 and detector.get_classification() == Detector.NO_FIRE: # TODO: check if it is correct
+    if clip_counter < num_clips and len(clip) > 0 and detector.get_classification() == Detector.NO_FIRE:
 
-        if pad_strategy == "duplicate":
-            # STRATEGY 1: DUPLICATE LAST FRAME
-            clip.extend([clip[-1]] * (clip_len - frame_counter))
-        elif pad_strategy == "zeros":
-            # STRATEGY 2: PAD WITH ZEROS
-            print(len(clip))
-            clip.extend([np.zeros(clip[0].shape)] * (clip_len - frame_counter)) # PAD FRAME
-        else:
-            raise ValueError("Invalid padding strategy {}".format(pad_strategy))
+        try:
+            # Try to pad the clip with the last frame, sometimes cv2 gives a wrong number of frames that causes a
+            # wrong number of clips and so a IndexOutOfRange exception. In that case, no pad is necessary.
+            if pad_strategy == "duplicate":
+                # STRATEGY 1: DUPLICATE LAST FRAME
+                clip.extend([clip[-1]] * (clip_len - frame_counter))
+            elif pad_strategy == "zeros":
+                # STRATEGY 2: PAD WITH ZEROS
+                print(len(clip))
+                clip.extend([np.zeros(clip[0].shape)] * (clip_len - frame_counter)) # PAD FRAME
+            else:
+                raise ValueError("Invalid padding strategy {}".format(pad_strategy))
 
-        input = apply_preprocessing(clip, model.preprocessing)
-        input =  torch.stack([transforms.functional.to_tensor(input[k])
-                                for k in input.keys()]) 
-        input_tensor = input.to(device)
-        with torch.no_grad():
-            out = output_function(model(input_tensor))
+            input = apply_preprocessing(clip, model.preprocessing)
+            input =  torch.stack([transforms.functional.to_tensor(input[k])
+                                    for k in input.keys()]) 
+            input_tensor = input.to(device)
+            with torch.no_grad():
+                out = output_function(model(input_tensor))
 
-        # Check if fire is detected basing on past detection
-        detector.step(out, clip_counter)
+            # Check if fire is detected basing on past detection
+            detector.step(out, clip_counter)
+        except IndexError:
+            pass
+        
     
     # 2)
     # If fire is detected, write on file the result of the classification

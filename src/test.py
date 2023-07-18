@@ -4,179 +4,14 @@ import math
 
 
 # PERSONAL IMPORTS
+from test_utils import Detector
+from test_utils import Profile
 import torch
 import albumentations
-from tqdm import tqdm
 import torch.nn as nn
-import torchvision.models as models
 from torchvision import transforms
 from pathlib import Path
-from pytorchvideo.models import create_res_basic_head
 from models.FireDetectionModelFactory import FireDetectionModelFactory
-from sklearn.metrics import precision_score, recall_score
-import contextlib
-import time 
-
-class Detector(object):
-    """Define the object that made detection based on the past clips seen."""
-
-    def __init__(self, clip_len, clip_stride, thresholds, consucutiveness):
-        """Initialize the detector.
-
-        Args:
-            clip_len (int): length of the clip in frames
-            clip_stride (int): stride of the clip in frames
-            thresholds (dict): map label -> threshold
-            consucutiveness (dict): map label -> number of consecutive clips to classify as label
-        """
-        # These lists will contain tuples made by (clip_index, confidence)
-        self._labels = list(thresholds.keys()) # List of labels in order of fire strongness
-        self._classification = 0 # The ACTUALLY classification of the video, default 0
-        self._incriminated_frame = None # None if no fire is detected
-                                        # A frame index if fire is detected
-
-        # Define a dict that maps label -> list of tuples (clip_index, confidence)
-        self._anomaly_clips = {label: [] for label in self._labels}
-        
-        self.CLIP_LEN = clip_len
-        self.CLIP_STRIDE = clip_stride
-
-        self._thresholds = thresholds # Map label -> threshold
-        self._consecutiveness = consucutiveness # Map label -> number of consecutive clips to classify as label
-
-
-    def step(self, clip_result, clip_index):
-        """Update the state of the detector based on the result of the last clip.
-
-        Args:
-            clip_result (torch.tensor): tensor of shape (1, 2) containing the probability of fire and smoke labels
-        """
-        for i in range(len(self._labels)):
-            label = self._labels[i]
-            if clip_result[i] >= self._thresholds[label]:
-                self.__add_clip(label, clip_index, clip_result[i])
-        
-        self.__state_update()
-
-    def get_labels(self):
-        """Get a list of labels for the current classification.
-        The format is a list of strings, each string is a label.
-
-        Raise:
-            ValueError: if no fire is detected
-
-        Returns:
-            list: list of labels. Example: ["Fire", "Smoke"]
-        """
-        if self.get_classification() == 0:
-            raise ValueError("No anomaly detected")
-        video_labels = []
-        for label in self._labels:
-            if len(self._anomaly_clips[label]) > self._consecutiveness[label]:
-                video_labels.append(label)
-
-        return labels
-        
-    def get_classification(self):
-        return self._classification
-    
-    def get_frame(self):
-        """Get the incriminated frame."""
-        return self._incriminated_frame
-
-    def __add_clip(self, label, clip_index, confidence):
-        self._anomaly_clips[label].append((clip_index, confidence))
-
-    def __state_update(self):
-        """Update the state of the detector based on the clips seen so far."""
-        # A video is classified as fire if 3 clips have labels smoke
-        # Or if just a clip has fire label
-        
-        # if some list of clips is longer of the consecutiveness threshold mark as fire
-        for label in self._labels:
-            if len(self._anomaly_clips[label]) >= self._consecutiveness[label]:
-                self._classification = 1
-
-                # POLICY: Incriminated frame is the center frame of the clip obtained by
-                # the last "consecutiveness threshold" clips
-
-                # Get the first and last clip index of the last "consecutiveness threshold" clips
-                first_clip_index = self._anomaly_clips[label][-self._consecutiveness[label]][0]
-                last_clip_index = self._anomaly_clips[label][-1][0]
-
-                # Get the last frame index of the last clip
-                self._incriminated_frame = last_clip_index * self.CLIP_STRIDE + self.CLIP_LEN - 1
-
-                return
-
-                
-            
-
-class Profile(contextlib.ContextDecorator):
-    """
-    Profile class for profiling execution time. 
-    Can be used as a decorator with @Profile() or as a context manager with 'with Profile():'.
-
-    Attributes
-    ----------
-    t : float
-        Accumulated time.
-    cuda : bool
-        Indicates whether CUDA is available.
-
-    Methods
-    -------
-    __enter__()
-        Starts timing.
-    __exit__(type, value, traceback)
-        Stops timing and updates accumulated time.
-    time()
-        Returns the current time, synchronizing with CUDA if available.
-    """
-    
-    def __init__(self, t=0.0):
-        """
-        Initializes the Profile class.
-
-        Parameters:
-        t : float
-            Initial accumulated time. Defaults to 0.0.
-        """
-        self.t = t  # Accumulated time
-        self.cuda = torch.cuda.is_available()  # Checks if CUDA is available
-
-    def __enter__(self):
-        """
-        Starts timing.
-        
-        Returns:
-        self
-        """
-        self.start = self.time()  # Start time
-        return self
-
-    def __exit__(self, type, value, traceback):
-        """
-        Stops timing and updates accumulated time.
-        
-        Parameters:
-        type, value, traceback : 
-            Standard parameters for an exit method in a context manager.
-        """
-        self.dt = self.time() - self.start  # Delta-time
-        self.t += self.dt  # Accumulates delta-time
-
-    def time(self):
-        """
-        Returns the current time, synchronizing with CUDA if available.
-        
-        Returns:
-        float
-            The current time.
-        """
-        if self.cuda:  # If CUDA is available
-            torch.cuda.synchronize()  # Synchronizes with CUDA
-        return time.time()  # Returns current time
 
 def apply_preprocessing(frames, preprocess):
     # Apply preprocessing to list of frames (copy paste of VideoFrameDataset)
@@ -191,95 +26,78 @@ def init_parameter():
     parser = argparse.ArgumentParser(description='Test')
     parser.add_argument("--videos", type=str, default='foo_videos/', help="Dataset folder")
     parser.add_argument("--results", type=str, default='foo_results/', help="Results folder")
-    parser.add_argument("--model", type=str, default='x3d_xs', help="Model name")
-    parser.add_argument("--clip_len", type=int, default=4, help="Length of a single clip")
-    parser.add_argument("--clip_stride", type=int, default=2, help="Stride between clips")
-    parser.add_argument("--ground_truth", type=str, default='GT', help="Ground truth folder")
-    parser.add_argument("--mode", type=str, default='multi', help="Single or multi class")
     args = parser.parse_args()
     return args
 
 args = init_parameter()
 
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-if device.type == "cuda":
-    torch.cuda.empty_cache() # clear memory
-
-
-model_name = str(args.model)
-weight_path = Path("../weights/" + str(args.model) + ".pth")
 output_function = nn.Sigmoid()
-pad_strategy = "duplicate"
+model_name = "x3d_l"
+mode = "single"
+pad_strategy = "zeros"
+weight_path = Path("../weights/" + str(model_name) + ".pth") # TODO: change this
+clip_len = 16
+clip_stride = 16
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-if args.mode == "multi":
+# If CUDA is avaible, empty the cache to avoid OOM
+if torch.cuda.is_available():
+    torch.cuda.empty_cache()
+
+if mode == "multi":
+    # Define the labels, thresholds and consecutiveness for the detector when it has
+    # to work in mode "multi", i.e. when it has to detect both fire and smoke (or none)
     labels = ["Fire", "Smoke"]
     thresholds_map = {"Fire": 0.5, "Smoke": 0.5}
     consecutiveness_map = {"Fire": 1, "Smoke": 3}
-elif args.mode == "single":
+elif mode == "single":
+    # Define the labels, thresholds and consecutiveness for the detector when it has
+    # to work in mode "single", i.e. when it has to detect only fire (or none)
     labels = ["Fire"]
-    thresholds_map = {"Fire": 0.5}
-    consecutiveness_map = {"Fire": 1}
+    thresholds_map = {"Fire": 0.5} # TODO: validate it
+    consecutiveness_map = {"Fire": 1} # TODO: validate it
 
+FIRE = 1 # the class of a video that contains fire/smoke
+NO_FIRE = 0 # the class of a video that does not contain fire or smoke
 
+# Preparing the model
 model = FireDetectionModelFactory.create_model(model_name, num_classes=len(labels), to_train=0)
-print("Loading weights from ", weight_path)
 model.load_state_dict(torch.load(weight_path, map_location=torch.device("cpu")))
 model.eval()
 model = model.float().to(device)
 
-## METRICS UTILS ##
-processed_frames = 0
-computation_time = 0.0
-dt = Profile()
-memory_per_video_occupancy = torch.zeros(len(os.listdir(args.videos)))
-fps_dict = {}
-
 # For all the test videos
 for video_index, video in enumerate(os.listdir(args.videos)):
-    print("-"*50)
-    print("Processing video ", video)
-    print("-"*50)
-
     # Process the video
     video_path = os.path.join(args.videos, video)
-    
+
     ret = True
     # Open video file
     cap = cv2.VideoCapture(video_path)
-    # Get frame per second 
-    fps = cap.get(cv2.CAP_PROP_FPS) 
-    fps_dict[video] = fps
-    # Get total number of frames
-    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) 
-    # Get number of clips
-    num_clips = math.ceil(max(1, (total_frames - args.clip_len)/args.clip_stride + 1)) # It must generate at least one clip
     
-    print('Frames per second =', fps)
-    print('Total frames =', total_frames)
-    print("Going to generate ", num_clips, " clips")
-
-    # Create a tensor of num_clips elements to store the results
-    results = torch.zeros(num_clips, len(labels)).to(device) # TO DO: probabilmente non serve
+    # Get video informations
+    fps = cap.get(cv2.CAP_PROP_FPS) 
+    total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) 
+    num_clips = math.ceil(max(1, (total_frames - clip_len)/clip_stride + 1)) # It must generate at least one clip
 
     clip = []
     frame_counter = 0
     clip_counter = 0
-    detector = Detector(args.clip_len, args.clip_stride, thresholds_map, consecutiveness_map)
+    detector = Detector(clip_len, clip_stride, thresholds_map, consecutiveness_map)
 
     while ret:
         ret, img = cap.read()
         
         # Here you should add your code for applying your method
         if ret:
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) # cv2 use a different format for image, BGR, so we need to convert it to RGB 
             # add to the list of frames
             clip.append(np.asarray(img)) # append the frame in list
             frame_counter += 1
 
-
             # When a clip is complete, we apply the model to it
-            if frame_counter == args.clip_len:
+            if frame_counter == clip_len:
+
                 input = apply_preprocessing(clip, model.preprocessing)
                 input =  torch.stack([transforms.functional.to_tensor(input[k])
                                 for k in input.keys()]) 
@@ -287,23 +105,17 @@ for video_index, video in enumerate(os.listdir(args.videos)):
                 input = input.to(device)
                 
                 with torch.no_grad():
-                    with dt:
-                        out = output_function(model(input))
-                    computation_time += dt.dt
-                    results[clip_counter] = out
-                
-                # Update frame processed
-                processed_frames += args.clip_len
+                    out = output_function(model(input))
 
                 # Check if fire is detected basing on past detection
-                detector.step(results[clip_counter], clip_counter)
-                if detector.get_classification() == 1:
+                detector.step(out, clip_counter)
+                if detector.get_classification() == FIRE:
                     break
 
-                # The next clip will start from the frame args.clip_stride
-                clip = clip[args.clip_stride:] # remove the first args.clip_stride frames
+                # The next clip will start from the frame clip_stride
+                clip = clip[clip_stride:] # remove the first clip_stride frames
 
-                frame_counter = args.clip_len - args.clip_stride
+                frame_counter = clip_len - clip_stride
                 clip_counter += 1
 
         ########################################################
@@ -317,147 +129,41 @@ for video_index, video in enumerate(os.listdir(args.videos)):
     # If the video is finished but no fire is detected, check if the last clip is complete
     # If it is not complete, we need to complete it with the last frames
     # After that, a last check for fire detection is performed
+    if clip_counter < num_clips and len(clip) > 0 and detector.get_classification() == NO_FIRE: # TODO: check if it is correct
 
-    # Second condition to avoid bug of empty clip
-    if clip_counter < num_clips and len(clip) > 0 and detector.get_classification() == 0 and frame_counter == args.clip_len:
-        print(frame_counter)
-        
         if pad_strategy == "duplicate":
             # STRATEGY 1: DUPLICATE LAST FRAME
-            clip.extend([clip[-1]] * (args.clip_len - frame_counter))
+            clip.extend([clip[-1]] * (clip_len - frame_counter))
         elif pad_strategy == "zeros":
             # STRATEGY 2: PAD WITH ZEROS
             print(len(clip))
-            clip.extend([np.zeros(clip[0].shape)] * (args.clip_len - frame_counter)) # PAD FRAME
+            clip.extend([np.zeros(clip[0].shape)] * (clip_len - frame_counter)) # PAD FRAME
         else:
             raise ValueError("Invalid padding strategy {}".format(pad_strategy))
 
         input = apply_preprocessing(clip, model.preprocessing)
-        input = [transforms.functional.to_tensor(frame) for frame in input.values()]
+        input =  torch.stack([transforms.functional.to_tensor(input[k])
+                                for k in input.keys()]) 
         input_tensor = torch.stack(input).to(device)
-        results[clip_counter] = output_function(model(input_tensor))
+        with torch.no_grad():
+            out = output_function(model(input_tensor))
 
         # Check if fire is detected basing on past detection
-        detector.step(results[clip_counter], clip_counter)
+        detector.step(out, clip_counter)
     
     # 2)
     # If fire is detected, write on file the result of the classification
-    if not os.path.exists(args.results):
-        os.makedirs(args.results)
-    f = open(args.results+video.split(".")[0]+".txt", "w")
-    if detector.get_classification() == 1:
-        # Print the time of the first frame of the fire
-        f.write(str(round(detector.get_frame()/fps)))  # NOT NECESSARY -> + "," + ",".join(detector.get_labels()))
+    
+    os.makedirs(args.results, exist_ok=True)
+    
+    video_name, video_ext = os.path.splitext(video)
+    results_file = os.path.join(args.results, video_name + ".txt")
 
-    ### METRIC: Store the memory usage ###
-    memory_per_video_occupancy[video_index] = torch.cuda.memory_allocated() / (1024 ** 2)
+    f = open(results_file, "w")
+    if detector.get_classification() == FIRE:
+        # Print the time of the first frame of the fire
+        second_of_detection = math.floor(detector.get_frame()/fps)
+        f.write(str(second_of_detection))
 
     ########################################################
     f.close()
-
-#### METRIC: Compute metrics ####
-# For each video in the test set, we take the result file computed by the previous code
-# and we compare it with the ground truth file
-
-tp = 0
-fp = 0
-fn = 0
-tn = 0
-delays = []
-
-video_counter = 0
-GUARD_TIME = 5 # seconds
-MEM_TARGET = 4000 # MB
-PFR_TARGET = 10 
-for video in os.listdir(args.videos):
-
-    # Read the result file
-    result_file = open(args.results+video.split(".")[0]+".txt", "r")
-    result = result_file.read()
-    result_file.close()
-
-    # Read the ground truth file
-    gt_file = open(args.ground_truth+video.split(".")[0]+".rtf", "r")
-    gt = gt_file.read()
-    gt_file.close()
-
-    # TP: all the detections in(P)ositive videos for which 𝑝 ≥ 𝑚𝑎𝑥(0, 𝑔 − 𝛥𝑡)
-    # FP: all the detections occurringat any time in (N)egative videos
-    #  or in (P)ositivevideos for which 𝑝 < 𝑚𝑎𝑥(0, 𝑔 − 𝛥𝑡)
-    # FN: the set of positive videosfor which no fire detection occurs
-    if len(gt) and len(result):
-        # Fire is present in the video and fire is detected
-        g_frame = int(gt.split(",")[0])#//fps_dict[video]
-        p_frame = int(result.split(",")[0]) # NOT NECESSARY BECAUSE ONLY FRAME IN RESULT FILE
-        if p_frame >= max(0, g_frame - GUARD_TIME):
-            # Detection is fast enough
-            delays.append(abs(p_frame - g_frame))
-            tp += 1
-        else:
-            # Detection is not fast enough
-            fp += 1
-    elif len(result) and not len(gt):
-        # Fire is not present in the video and fire is detected
-        fp += 1
-    elif len(gt) and not len(result):
-        # Fire is present in the video and fire is not detected
-        fn += 1
-    elif not len(gt) and not len(result):
-        # Fire is not present in the video and fire is not detected
-        tn += 1
-    else:
-        raise ValueError("Something went wrong")
-
-
-    video_counter += 1
-
-
-# Compute precision, recall and f1 score
-# Count the number of true positives, false positives and false negatives
-
-try:
-    precision = tp/(tp+fp)
-except ZeroDivisionError:
-    precision = 0
-try:
-    recall = tp/(tp+fn)
-except ZeroDivisionError:
-    recall = 0
-
-try:
-    D = sum(delays)/len(delays) 
-    Dn = max(0, 60-D)/60
-except:
-    print("Can't calculate D because no fire detected in the test set")
-    D = float("inf")
-    Dn = 0
-
-f_score = 2 * precision * recall / (1e-10 + precision + recall)
-pfr = 1 /(computation_time / processed_frames)
-mem = memory_per_video_occupancy.mean().item()
-
-pfr_delta = max(0, PFR_TARGET/pfr - 1)
-mem_delta = max(0, mem/MEM_TARGET - 1)
-fds = (precision * recall * Dn) / ((1 + pfr_delta) * (1 + mem_delta))
-accuracy = (tp + tn) / (tp + tn + fp + fn)
-
-# Print results
-print("..:: RESULTS ::..")
-
-print("Accuracy: {:.4f}".format(accuracy))
-print("Precision: {:.4f}".format(precision))
-print("Recall: {:.4f}".format(recall))
-print("F-score: {:.4f}".format(f_score))
-print("Average notification delay: {:.4f}".format(D))
-print("Normalized average detection delay: {:.4f}".format(Dn))
-print("Processing frame rate: {:.4f}".format(pfr))
-print("Memory usage: {:.4f}".format(mem))
-print("Final detection score: {:.4f}".format(fds))
-
-
-import csv
-# Write results on csv file
-with open(args.results+"metrics.csv", "w") as f:
-    writer = csv.writer(f)
-    writer.writerow(["accuracy", "precision", "recall", "f-score", "and", "nand", "pfr", "mem","fds"])
-    writer.writerow([accuracy, precision, recall, f_score, D, Dn, pfr, mem, fds])

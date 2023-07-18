@@ -43,13 +43,13 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if device.type == "cuda":
     torch.cuda.empty_cache() # clear memory
 
-if args.mode == "multi":
+if mode == "multi":
     # Define the labels, thresholds and consecutiveness for the detector when it has
     # to work in mode "multi", i.e. when it has to detect both fire and smoke (or none)
     labels = ["Fire", "Smoke"]
     thresholds_map = {"Fire": 0.5, "Smoke": 0.5}
     consecutiveness_map = {"Fire": 1, "Smoke": 3}
-elif args.mode == "single":
+elif mode == "single":
     # Define the labels, thresholds and consecutiveness for the detector when it has
     # to work in mode "single", i.e. when it has to detect only fire (or none)
     labels = ["Fire"]
@@ -87,7 +87,7 @@ for video_index, video in enumerate(os.listdir(args.videos)):
     # Get total number of frames
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) 
     # Get number of clips
-    num_clips = math.ceil(max(1, (total_frames - args.clip_len)/args.clip_stride + 1)) # It must generate at least one clip
+    num_clips = math.ceil(max(1, (total_frames - clip_len)/clip_stride + 1)) # It must generate at least one clip
     
     print('Frames per second =', fps)
     print('Total frames =', total_frames)
@@ -99,7 +99,7 @@ for video_index, video in enumerate(os.listdir(args.videos)):
     clip = []
     frame_counter = 0
     clip_counter = 0
-    detector = Detector(args.clip_len, args.clip_stride, thresholds_map, consecutiveness_map)
+    detector = Detector(clip_len, clip_stride, thresholds_map, consecutiveness_map)
 
     while ret:
         ret, img = cap.read()
@@ -113,7 +113,7 @@ for video_index, video in enumerate(os.listdir(args.videos)):
 
 
             # When a clip is complete, we apply the model to it
-            if frame_counter == args.clip_len:
+            if frame_counter == clip_len:
                 input = apply_preprocessing(clip, model.preprocessing)
                 input =  torch.stack([transforms.functional.to_tensor(input[k])
                                 for k in input.keys()]) 
@@ -127,7 +127,7 @@ for video_index, video in enumerate(os.listdir(args.videos)):
                     results[clip_counter] = out
                 
                 # Update frame processed
-                processed_frames += args.clip_len
+                processed_frames += clip_len
 
                 # Check if fire is detected basing on past detection
                 detector.step(results[clip_counter], clip_counter)
@@ -135,9 +135,9 @@ for video_index, video in enumerate(os.listdir(args.videos)):
                     break
 
                 # The next clip will start from the frame args.clip_stride
-                clip = clip[args.clip_stride:] # remove the first args.clip_stride frames
+                clip = clip[clip_stride:] # remove the first args.clip_stride frames
 
-                frame_counter = args.clip_len - args.clip_stride
+                frame_counter = clip_len - clip_stride
                 clip_counter += 1
 
         ########################################################
@@ -153,16 +153,16 @@ for video_index, video in enumerate(os.listdir(args.videos)):
     # After that, a last check for fire detection is performed
 
     # Second condition to avoid bug of empty clip
-    if clip_counter < num_clips and len(clip) > 0 and detector.get_classification() == 0 and frame_counter == args.clip_len:
+    if clip_counter < num_clips and len(clip) > 0 and detector.get_classification() == 0:
         print(frame_counter)
         
         if pad_strategy == "duplicate":
             # STRATEGY 1: DUPLICATE LAST FRAME
-            clip.extend([clip[-1]] * (args.clip_len - frame_counter))
+            clip.extend([clip[-1]] * (clip_len - frame_counter))
         elif pad_strategy == "zeros":
             # STRATEGY 2: PAD WITH ZEROS
             print(len(clip))
-            clip.extend([np.zeros(clip[0].shape)] * (args.clip_len - frame_counter)) # PAD FRAME
+            clip.extend([np.zeros(clip[0].shape)] * (clip_len - frame_counter)) # PAD FRAME
         else:
             raise ValueError("Invalid padding strategy {}".format(pad_strategy))
 
@@ -203,6 +203,8 @@ video_counter = 0
 GUARD_TIME = 5 # seconds
 MEM_TARGET = 4000 # MB
 PFR_TARGET = 10 
+
+results_folder = "../test_data/GT_TEST_SET_SPLIT/"
 for video in os.listdir(args.videos):
 
     # Read the result file
@@ -211,7 +213,7 @@ for video in os.listdir(args.videos):
     result_file.close()
 
     # Read the ground truth file
-    gt_file = open(args.ground_truth+video.split(".")[0]+".rtf", "r")
+    gt_file = open(results_folder+video.split(".")[0]+".rtf", "r")
     gt = gt_file.read()
     gt_file.close()
 
@@ -229,6 +231,7 @@ for video in os.listdir(args.videos):
             tp += 1
         else:
             # Detection is not fast enough
+            print("Detection is not fast enough")
             fp += 1
     elif len(result) and not len(gt):
         # Fire is not present in the video and fire is detected
@@ -278,6 +281,7 @@ accuracy = (tp + tn) / (tp + tn + fp + fn)
 # Print results
 print("..:: RESULTS ::..")
 
+print("TP: {}, FP: {}, FN: {}, TN: {}".format(tp, fp, fn, tn))
 print("Accuracy: {:.4f}".format(accuracy))
 print("Precision: {:.4f}".format(precision))
 print("Recall: {:.4f}".format(recall))

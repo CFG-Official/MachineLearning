@@ -26,13 +26,14 @@ def init_parameter():
     parser = argparse.ArgumentParser(description='Test')
     parser.add_argument("--videos", type=str, default='foo_videos/', help="Dataset folder")
     parser.add_argument("--results", type=str, default='foo_results/', help="Results folder")
+    parser.add_argument("--model", type=str, default='x3d_xs', help="Model name")
     args = parser.parse_args()
     return args
 
 args = init_parameter()
 
 output_function = nn.Sigmoid()
-model_name = "x3d_l"
+model_name = args.model
 mode = "single"
 pad_strategy = "duplicate"
 weight_path = Path("../weights/" + str(model_name) + ".pth")

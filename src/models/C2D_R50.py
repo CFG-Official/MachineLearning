@@ -8,6 +8,8 @@ class C2D_R50(Model):
     
     def __init__(self, num_classes=1, to_train=0):
 
+        super().__init__(num_classes, to_train)
+
         self.preprocessing = Sequential([
                             Resize(height=256, width=256, always_apply=True),
                             Normalize(mean=[0.485, 0.456, 0.406],

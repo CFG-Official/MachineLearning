@@ -51,9 +51,9 @@ The competition repository contains several components to facilitate model devel
 - Ensure that all dependencies are installed before running the notebooks and scripts.
 - Refer to the documentation within each notebook and script for detailed instructions on usage and functionality.
 
-## Group members
-| Surname and Name      | E-Mail                                                                    | Unique ID   |
-|-----------------------|---------------------------------------------------------------------------|-------------|
-| Cerasuolo Cristian    | [c.cerasuolo2@studenti.unisa.it](mailto:c.cerasuolo2@studenti.unisa.it)   | 0622701899  |
-| Ferrara Grazia        | [g.ferrara75@studenti.unisa.it](mailto:g.ferrara75@studenti.unisa.it)     | 0622701901  |
-| Guarini Alessio       | [a.guarini7@studenti.unisa.it](mailto:a.guarini7@studenti.unisa.it)       | 0622702042  |
+## Group Members
+| Last Name, First Name | E-Mail                                                                   | ID          |
+|-----------------------|--------------------------------------------------------------------------|-------------|
+| Cerasuolo Cristian    | [c.cerasuolo2@studenti.unisa.it](mailto:c.cerasuolo2@studenti.unisa.it)  | 0622701899  |
+| Ferrara Grazia        | [g.ferrara75@studenti.unisa.it](mailto:g.ferrara75@studenti.unisa.it)    | 0622701901  |
+| Guarini Alessio       | [a.guarini7@studenti.unisa.it](mailto:a.guarini7@studenti.unisa.it)      | 0622702042  |
